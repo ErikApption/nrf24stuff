@@ -29,7 +29,11 @@ radio = RF24(22, 0)
 
 # using the python keyword global is bad practice. Instead we'll use a 1 item
 # list to store our float number for the payloads sent/received
-payload = [0.0,0.0]
+
+nodeID = 0;
+payloadID = 0;  
+temp = 0.0;
+voltage = 0.0;
 
 def slave(timeout=290):
     """Listen for any payloads and print the transaction
@@ -43,31 +47,55 @@ def slave(timeout=290):
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio.available_pipe()
         if has_payload:
+            print("payload received...")
             # fetch 1 payload from RX FIFO
             buffer = radio.read(radio.payloadSize)
             # use struct.unpack() to convert the buffer into usable data
             # expecting a little endian float, thus the format string "<f"
             # buffer[:4] truncates padded 0s in case payloadSize was not set
-            payload[0] = struct.unpack("<f", buffer[:4])[0]
-            payload[1] = struct.unpack("<f", buffer[4:8])[0]
-            volt = payload[1] / 73.78378
-            ret1 = client.publish(root + "/DS18B20/Temperature", "{:0.2f}".format(payload[0]))
-            ret2 = client.publish(root + "/Arduino/Humidity","{:0.2f}".format(payload[1]))
+
+            bufStart = 0;
+            bufEnd = 0;
+            #unsigned long nodeID;
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('L');
+            nodeID = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
+            
+            #unsigned long payloadID;  
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('L');
+            payloadID = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
+
+            #float temp;
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('f');
+            temp = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+
+            #float voltage;
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('f');
+            voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+
+
+            volt = voltage / 73.78378
+            ret1 = client.publish(root + "/DS18B20/Temperature", "{:0.2f}".format(temp))
+            ret2 = client.publish(root + "/Arduino/Voltage","{:0.2f}".format(voltage))
             published = (ret1.rc == paho.MQTT_ERR_SUCCESS)
             #print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
             fullPath = os.path.expanduser('~/last_update.txt')
             with open(fullPath,'w') as last_update:
-                last_update.write("Temp: {0:0.1f} °C".format(payload[0]) + "\n")
-                last_update.write("Voltage (abs): {0:0.1f}".format(payload[1]))
-
+                last_update.write("Temp: {0:0.1f} °C".format(temp) + "\n")
+                last_update.write("Voltage (abs): {0:0.1f}".format(voltage))
+                last_update.write("nodeID: {} / payloadID {}".format(nodeID,payloadID))
+                last_update.write("\n")
 
             # print details about the received packet
             print(
-                "{} Received {} bytes on pipe {}: {} + {} ({}) - Published {}".format(
+                "{} Received {} bytes on pipe {}: {} + {} ({}) - Published {} - node {} / payload {}".format(
                     str(datetime.datetime.now()),
 		    radio.payloadSize,
                     pipe_number,
-                    payload[0], volt, payload[1], published
+                    temp, volt, voltage, published,nodeID,payloadID
                 )
             )
             #start_timer = time.monotonic()  # reset the timeout timer
@@ -90,29 +118,30 @@ if __name__ == "__main__":
 
     # For this example, we will use different addresses
     # An address need to be a buffer protocol object (bytearray)
-    address = [b"1Node", b"2Node"]
+    address = [b"2Node", b"3Node", b"4Node", b"5Node"]
+
+    receiver_address = b"1Node";
     # It is very helpful to think of an address as a path instead of as
     # an identifying device destination
 
     # to use different addresses on a pair of radios, we need a variable to
     # uniquely identify which address this radio will use to transmit
     # 0 uses address[0] to transmit, 1 uses address[1] to transmit
-    radio_number = 1  # uses default value from `parser`
 
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
     # radio.setPALevel(RF24_PA_LOW)  # RF24_PA_MAX is default
     radio.setChannel(5)
     # set the TX address of the RX node into the TX pipe
-    radio.openWritingPipe(address[radio_number])  # always uses pipe 0
+    radio.openWritingPipe(receiver_address)  # always uses pipe 0
 
     # set the RX address of the TX node into a RX pipe
-    radio.openReadingPipe(1, address[not radio_number])  # using pipe 1
+    radio.openReadingPipe(1, address[0])  # using pipe 1
 
     # To save time during transmission, we'll set the payload size to be only
     # what we need. A float value occupies 4 bytes in memory using
     # struct.pack(); "<f" means a little endian unsigned float
-    radio.payloadSize = len(struct.pack("<f", payload[0]))*2
+    radio.payloadSize = struct.calcsize('L')+struct.calcsize('L')+struct.calcsize('f')+struct.calcsize('f')
 
     # for debugging, we have 2 options that print a large block of details
     # (smaller) function that prints raw register values
