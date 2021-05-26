@@ -1,4 +1,6 @@
 
+#define DEBUG_MODE
+
 #include <SPI.h>
 #include "printf.h"
 #include "RF24.h"
@@ -14,7 +16,6 @@
 //#include "SI114X.h"
 //#include "si7021.h"
 //#include <dhtnew.h>
-
 #include "DHT.h"
 
 #define TS_PIN 9
@@ -22,11 +23,10 @@
 #define NODE_ID 1
 #define DHT_PIN 5
 
-#define DEBUG_MODE
 #define SLEEP_CYCLES_SUCCESS 150 //20 minutes on success - 
 #define SLEEP_CYCLES 10 //80 seconds otherwise
 
-#define DHTTYPE DHT22 
+#define DHTTYPE DHT22
 
 DHT dht(DHT_PIN, DHTTYPE);
 
@@ -36,7 +36,7 @@ Adafruit_SI1145 uv = Adafruit_SI1145();
 
 //DHTNEW mySensor(DHT_PIN);
 // instantiate an object for the nRF24L01 transceiver
-RF24 radio(7, 8); // using pin 7 for the CE pin, and pin 8 for the CSN pin
+RF24 radio(6, 7); // using pin 7 for the CE pin, and pin 8 for the CSN pin
 
 // Let these addresses be used for the pair
 uint8_t receiver_address[6] = "1Node";
@@ -59,15 +59,15 @@ void displaySensorDetails(void)
 {
   sensor_t sensor;
   tsl.getSensor(&sensor);
-  Serial.println("------------------------------------");
-  Serial.print  ("Sensor:       "); Serial.println(sensor.name);
-  Serial.print  ("Driver Ver:   "); Serial.println(sensor.version);
-  Serial.print  ("Unique ID:    "); Serial.println(sensor.sensor_id);
-  Serial.print  ("Max Value:    "); Serial.print(sensor.max_value); Serial.println(" lux");
-  Serial.print  ("Min Value:    "); Serial.print(sensor.min_value); Serial.println(" lux");
-  Serial.print  ("Resolution:   "); Serial.print(sensor.resolution); Serial.println(" lux");
-  Serial.println("------------------------------------");
-  Serial.println("");
+  Debugln("------------------------------------");
+  Debug  ("Sensor:       "); Debugln(sensor.name);
+  Debug  ("Driver Ver:   "); Debugln(sensor.version);
+  Debug  ("Unique ID:    "); Debugln(sensor.sensor_id);
+  Debug  ("Max Value:    "); Debug(sensor.max_value); Debugln(" lux");
+  Debug  ("Min Value:    "); Debug(sensor.min_value); Debugln(" lux");
+  Debug  ("Resolution:   "); Debug(sensor.resolution); Debugln(" lux");
+  Debugln("------------------------------------");
+  Debugln("");
   delay(500);
 }
 
@@ -84,7 +84,7 @@ void displaySensorDetails(void)
 //  mySI1145.setAlsVisAdcGain(0);
 //
 //  //mySI1145.enableHighResolutionVis();
-//  Serial.println("SI1145 - forced ALS");
+//  Debugln("SI1145 - forced ALS");
 //}
 
 /**************************************************************************/
@@ -100,15 +100,15 @@ void configureLightSensor(void)
   tsl.enableAutoRange(true);            /* Auto-gain ... switches automatically between 1x and 16x */
 
   /* Changing the integration time gives you better sensor resolution (402ms = 16-bit data) */
-  tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);      /* fast but low resolution */
-  // tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_101MS);  /* medium resolution and speed   */
+  //tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);      /* fast but low resolution */
+  tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_101MS);  /* medium resolution and speed   */
   // tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_402MS);  /* 16-bit data but slowest conversions */
 
   /* Update these values depending on what you've set above! */
-  Serial.println("------------------------------------");
-  Serial.print  ("Gain:         "); Serial.println("Auto");
-  Serial.print  ("Timing:       "); Serial.println("13 ms");
-  Serial.println("------------------------------------");
+  Debugln("------------------------------------");
+  Debug  ("Gain:         "); Debugln("Auto");
+  Debug  ("Timing:       "); Debugln("13 ms");
+  Debugln("------------------------------------");
 }
 
 void setup() {
@@ -119,48 +119,58 @@ void setup() {
   while (!Serial) {
     // some boards need to wait to ensure access to serial over USB
   }
+  Serial.println("Debug mode enabled");
 #endif
 
-  Serial.println(F("Starting Weather Station"));
+  Debugln(F("Starting Weather Station"));
 
-  Serial.println(F("Configuring Transistor Pin"));
+  Debugln(F("Configuring Transistor Pin"));
   pinMode(TS_PIN, OUTPUT);    // sets the digital pin 13 as output
 
-  Serial.println(F("Ready..."));
+  Debugln(F("Ready..."));
 
 } // setup
 
+#define MAX_TEMP_RETRIES 5
 //float SI7021_temperature = NAN;
 //float SI7021_humidity = NAN;
 void readTemp(void)
 {
-//    mySensor.read();
-//    Serial.print(mySensor.getHumidity(), 1);
-//    Serial.print("\t");
-//    Serial.println(mySensor.getTemperature(), 1);
+  //      mySensor.read();
+  //      Debug(mySensor.getHumidity(), 1);
+  //      Debug("\t");
+  //      Debugln(mySensor.getTemperature(), 1);
 
-    dht.begin();
-float temp_hum_val[2] = {0};
-    // Reading temperature or humidity takes about 250 milliseconds!
-    // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  dht.begin();
+  float temp_hum_val[2] = {0};
+  // Reading temperature or humidity takes about 250 milliseconds!
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
 
-
+  int retries = 0;
+  for (retries; retries < MAX_TEMP_RETRIES; retries++)
+  {
     if (!dht.readTempAndHumidity(temp_hum_val)) {
-        Serial.print("Humidity: ");
-        Serial.print(temp_hum_val[0]);
-        Serial.print(" %\t");
-        Serial.print("Temperature: ");
-        Serial.print(temp_hum_val[1]);
-        Serial.println(" *C");
+      payload.humidity = temp_hum_val[0];
+      payload.temp = temp_hum_val[1];
+      Debug("Humidity: ");
+      Debug(temp_hum_val[0]);
+      Debug(" %\t");
+      Debug("Temperature: ");
+      Debug(temp_hum_val[1]);
+      Debug("Retries: ");
+      Debug(retries);
+      Debugln(" *C");
+      break;
     } else {
-        Serial.println("Failed to get temprature and humidity value.");
+      Debugln("Failed to get temprature and humidity value.");
     }
-    
+  }
+
 }
 
 void readUVSensor(void) {
   if (! uv.begin()) {
-    Serial.println("Didn't find Si1145");
+    Debugln("Didn't find Si1145");
   }
   else
   {
@@ -169,15 +179,17 @@ void readUVSensor(void) {
     payload.amb_als = 0;
     payload.amb_ir = 0;
 
-    Serial.println("=Reading Si1145=");
+    Debugln("=Reading Si1145=");
 
-    Serial.print("Vis: "); Serial.println(uv.readVisible());
-    Serial.print("IR: "); Serial.println(uv.readIR());
+    Debug("Vis: "); Debugln(uv.readVisible());
+    Debug("IR: "); Debugln(uv.readIR());
     float UVindex = uv.readUV();
+    payload.uv_index = UVindex;
     //UVindex /= 100.0;
-    Serial.print("UV: ");  Serial.println(UVindex);
+    Debug("UV: ");  Debugln(UVindex);
 
     for (int i = 0; i < 50; i++) {
+      uv.begin();
       //mySI1145.clearAllInterrupts();
       //mySI1145.startSingleMeasurement();
       payload.amb_als += uv.readVisible();
@@ -185,15 +197,15 @@ void readUVSensor(void) {
     }
     payload.amb_als /= 50;
     payload.amb_ir /= 50;
-    Serial.print("Ambient Light: ");
-    Serial.println(payload.amb_als);
-    Serial.print("Infrared Light: ");
-    Serial.println(payload.amb_ir);
+    Debug("Ambient Light: ");
+    Debugln(payload.amb_als);
+    Debug("Infrared Light: ");
+    Debugln(payload.amb_ir);
     //  failureCode = mySI1145.getFailureMode();  // reads the response register
     //  if((failureCode&128)){   // if bit 7 is set in response register, there is a failure
     //    handleFailure(failureCode);
     //  }
-    Serial.println("---------");
+    Debugln("---------");
   }
 }
 
@@ -204,19 +216,15 @@ void loop() {
   digitalWrite(TS_PIN, HIGH); // sets the digital pin 13 on
   //for (int il = 0; il < 20;il++)
   //  delay(1000);
-  delay(100);
+  delay(500);
 
-  Serial.println(F("Reading temp"));
+  Debugln(F("Reading temp"));
   readTemp();
 
-  Serial.println(F("TSL Sensor"));
+  Debugln(F("TSL Sensor"));
   if (tsl.begin())
   {
-    Serial.println(F("Found a TSL2591 sensor"));
-    /* Display some basic information on this sensor */
-#ifdef DEBUG_MODE
-    //displaySensorDetails();
-#endif
+    Debugln(F("Found a TSL2591 sensor"));
 
     /* Configure the sensor */
     configureLightSensor();
@@ -229,19 +237,17 @@ void loop() {
     if (event.light)
     {
       payload.luxMeasure = event.light;
-#ifdef DEBUG_MODE
-      Serial.print(event.light); Serial.println(" lux");
-#endif
+      Debug(event.light); Debugln(" lux");
     }
-
   }
   else
   {
-    Serial.println(F("No TSL sensor found ... check your wiring?"));
+    Debugln(F("No TSL sensor found ... check your wiring?"));
   }
 
   readUVSensor();
 
+  Debugln(F("Sending Radio packet"));
   int radioReady = 1;
   int sensorReady = 1;
   int success = 0;
@@ -252,16 +258,17 @@ void loop() {
   }
   else
   {
+    Debugln(F("-----------------"));
+    Debugln(F("Radio initialized"));
 
-    // role variable is hardcoded to RX behavior, inform the user of this
-    //Debugln(F("*** PRESS 'T' to begin transmitting to the other node"));
     radio.setChannel(5);
     //radio.setAutoAck(false); //https://github.com/nRF24/RF24/issues/685
     // Set the PA Level low to try preventing power supply related problems
     // because these examples are likely run with nodes in close proximity to
     // each other.
-    radio.setPALevel(RF24_PA_MAX);  // RF24_PA_MAX is default.
-
+    //radio.setPALevel(RF24_PA_MAX);  // RF24_PA_MAX is default.
+    radio.setPALevel(RF24_PA_LOW); 
+    
     // save on transmission time by setting the radio to only transmit the
     // number of bytes we need to transmit a float
     radio.setPayloadSize(sizeof(payload)); // float datatype occupies 4 bytes
@@ -270,7 +277,7 @@ void loop() {
     radio.openWritingPipe(nodes[NODE_ID]);     // always uses pipe 0
 
     // set the RX address of the TX node into a RX pipe
-    radio.openReadingPipe(1, receiver_address); // using pipe 1
+    //radio.openReadingPipe(1, receiver_address); // using pipe 1
 
     // additional setup specific to the node's role
     radio.stopListening();  // put radio in TX mode
@@ -286,19 +293,17 @@ void loop() {
     //    payload.temp = sensor.getTempC(); TOFIX
     //    payload.voltage = analogRead(A1);
     payload.nodeID = NODE_ID;
-    Debug("Temp: ");
-    Debugln(payload.temp);
 
+    Debugln("Payload size: ");
+    Debugln(sizeof(payload));
     for (int retries = 0; retries < MAX_RADIO_RETRIES; retries++)
     {
-      Debug("Retries: ");
+      Debug("Radio Retries: ");
       Debugln(retries);
       payload.payloadID = retries;
       radio.powerUp();
       unsigned long start_timer = micros();                    // start the timer
       bool report = radio.write(&payload, sizeof(payload));      // transmit & save the report
-      Debugln("Payload size: ");
-      Debugln(sizeof(payload));
       unsigned long end_timer = micros();                      // end the timer
 
       if (report) {
@@ -324,7 +329,7 @@ void loop() {
 
   Debugln("Starting sleep");
 #ifdef DEBUG_MODE
-  int sleep_time = 0;
+  int sleep_time = 1;
 #else
   int sleep_time = (success == 1) ? SLEEP_CYCLES_SUCCESS : SLEEP_CYCLES;
 #endif
