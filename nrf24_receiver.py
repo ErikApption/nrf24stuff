@@ -47,24 +47,25 @@ def slave(timeout=290):
     while (time.monotonic() - start_timer) < timeout:
         has_payload, pipe_number = radio.available_pipe()
         if has_payload:
-            print("payload received...")
             # fetch 1 payload from RX FIFO
             buffer = radio.read(radio.payloadSize)
             # use struct.unpack() to convert the buffer into usable data
             # expecting a little endian float, thus the format string "<f"
             # buffer[:4] truncates padded 0s in case payloadSize was not set
+            print("payload received... pipe:{} buffer:{} radio payload:{}".format(pipe_number, len(buffer),radio.payloadSize))
+
 
             bufStart = 0;
             bufEnd = 0;
             #unsigned long nodeID;
             bufStart = bufEnd;
-            bufEnd = bufStart + struct.calcsize('L');
-            nodeID = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
+            bufEnd = bufStart + struct.calcsize('H');
+            nodeID = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
             
             #unsigned long payloadID;  
             bufStart = bufEnd;
-            bufEnd = bufStart + struct.calcsize('L');
-            payloadID = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
+            bufEnd = bufStart + struct.calcsize('H');
+            payloadID = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
 
             #float temp;
             bufStart = bufEnd;
@@ -76,18 +77,43 @@ def slave(timeout=290):
             bufEnd = bufStart + struct.calcsize('f');
             voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
 
+            #float humidity;
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('f');
+            humidity = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
 
+            #unsigned long luxMeasure;
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('H');
+            luxMeasure = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+
+            #unsigned long amb_als;
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('H');
+            amb_als = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+
+            #unsigned long amb_ir;  
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('H');
+            amb_ir = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+
+            #float uv_index;
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('f');
+            uv_index = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+            published = False
             volt = voltage / 73.78378
-            ret1 = client.publish(root + "/DS18B20/Temperature", "{:0.2f}".format(temp))
-            ret2 = client.publish(root + "/Arduino/Voltage","{:0.2f}".format(voltage))
-            published = (ret1.rc == paho.MQTT_ERR_SUCCESS)
-            #print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
-            fullPath = os.path.expanduser('~/last_update.txt')
-            with open(fullPath,'w') as last_update:
-                last_update.write("Temp: {0:0.1f} °C".format(temp) + "\n")
-                last_update.write("Voltage (abs): {0:0.1f}".format(voltage))
-                last_update.write("nodeID: {} / payloadID {}".format(nodeID,payloadID))
-                last_update.write("\n")
+            if (nodeID == 0):
+                ret1 = client.publish(root + "/DS18B20/Temperature", "{:0.2f}".format(temp))
+                ret2 = client.publish(root + "/Arduino/Voltage","{:0.2f}".format(voltage))
+                published = (ret1.rc == paho.MQTT_ERR_SUCCESS)
+                #print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
+                fullPath = os.path.expanduser('~/last_update.txt')
+                with open(fullPath,'w') as last_update:
+                    last_update.write("Temp: {0:0.1f} °C".format(temp) + "\n")
+                    last_update.write("Voltage (abs): {0:0.1f}".format(voltage) + "\n")
+                    last_update.write("nodeID: {} / payloadID {}".format(nodeID,payloadID))
+                    last_update.write("\n")
 
             # print details about the received packet
             print(
@@ -137,12 +163,13 @@ if __name__ == "__main__":
 
     # set the RX address of the TX node into a RX pipe
     radio.openReadingPipe(1, address[0])  # using pipe 1
+    radio.openReadingPipe(2, address[1])  # using pipe 2
 
     # To save time during transmission, we'll set the payload size to be only
     # what we need. A float value occupies 4 bytes in memory using
     # struct.pack(); "<f" means a little endian unsigned float
-    radio.payloadSize = struct.calcsize('L')+struct.calcsize('L')+struct.calcsize('f')+struct.calcsize('f')
-
+    radio.payloadSize = (2*struct.calcsize('H')+2*struct.calcsize('f')+
+                         struct.calcsize('f')+3*struct.calcsize('H')+struct.calcsize('f'))
     # for debugging, we have 2 options that print a large block of details
     # (smaller) function that prints raw register values
     # radio.printDetails()
