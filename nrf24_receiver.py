@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
     # For this example, we will use different addresses
     # An address need to be a buffer protocol object (bytearray)
-    address = [b"2Node", b"3Node", b"4Node", b"5Node"]
+    address = [b"2Node", b"3Node", b"4Node", b"5Node",b"6Node"]
 
     receiver_address = b"1Node";
     # It is very helpful to think of an address as a path instead of as
