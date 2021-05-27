@@ -41,6 +41,7 @@ def slave(timeout=290):
     :param int timeout: The number of seconds to wait (with no transmission)
         until exiting function.
     """
+    print("waiting for signal... radio payload:{}".format(radio.payloadSize))
     radio.startListening()  # put radio in RX mode
 
     start_timer = time.monotonic()
@@ -53,7 +54,6 @@ def slave(timeout=290):
             # expecting a little endian float, thus the format string "<f"
             # buffer[:4] truncates padded 0s in case payloadSize was not set
             print("payload received... pipe:{} buffer:{} radio payload:{}".format(pipe_number, len(buffer),radio.payloadSize))
-
 
             bufStart = 0;
             bufEnd = 0;
@@ -108,20 +108,19 @@ def slave(timeout=290):
                 ret2 = client.publish(root + "/Arduino/Voltage","{:0.2f}".format(voltage))
                 published = (ret1.rc == paho.MQTT_ERR_SUCCESS)
                 #print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
-                fullPath = os.path.expanduser('~/last_update.txt')
-                with open(fullPath,'w') as last_update:
-                    last_update.write("Temp: {0:0.1f} °C".format(temp) + "\n")
-                    last_update.write("Voltage (abs): {0:0.1f}".format(voltage) + "\n")
-                    last_update.write("nodeID: {} / payloadID {}".format(nodeID,payloadID))
-                    last_update.write("\n")
+            fullPath = os.path.expanduser('~/last_update.txt')
+            with open(fullPath,'w') as last_update:
+                last_update.write("NodeID {} PayloadID {}".format(nodeID,payloadID))
+                last_update.write("Temp: {0:0.1f} °C".format(temp) + "\n")
+                last_update.write("Voltage (abs): {0:0.1f}".format(voltage) + "\n")
+                last_update.write("Humidity {} LuxMeasure {} Ambiant Light {} Ambiant IR {}".format(humidity,luxMeasure,amb_als,amb_ir))
+                last_update.write("\n")
 
             # print details about the received packet
             print(
                 "{} Received {} bytes on pipe {}: {} + {} ({}) - Published {} - node {} / payload {}".format(
-                    str(datetime.datetime.now()),
-		    radio.payloadSize,
-                    pipe_number,
-                    temp, volt, voltage, published,nodeID,payloadID
+                    str(datetime.datetime.now()), radio.payloadSize,
+                    pipe_number, temp, volt, voltage, published,nodeID,payloadID
                 )
             )
             #start_timer = time.monotonic()  # reset the timeout timer
@@ -144,7 +143,7 @@ if __name__ == "__main__":
 
     # For this example, we will use different addresses
     # An address need to be a buffer protocol object (bytearray)
-    address = [b"2Node", b"3Node", b"4Node", b"5Node"]
+    address = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
 
     receiver_address = b"1Node";
     # It is very helpful to think of an address as a path instead of as
@@ -156,14 +155,17 @@ if __name__ == "__main__":
 
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
-    # radio.setPALevel(RF24_PA_LOW)  # RF24_PA_MAX is default
+    radio.setPALevel(RF24_PA_LOW)  # RF24_PA_MAX is default
     radio.setChannel(5)
+
+    radio.setAutoAck(True)
     # set the TX address of the RX node into the TX pipe
     radio.openWritingPipe(receiver_address)  # always uses pipe 0
 
     # set the RX address of the TX node into a RX pipe
-    radio.openReadingPipe(1, address[0])  # using pipe 1
-    radio.openReadingPipe(2, address[1])  # using pipe 2
+    # write the addresses to all pipes.
+    for pipe_n, addr in enumerate(address):
+        radio.openReadingPipe(pipe_n, addr)    
 
     # To save time during transmission, we'll set the payload size to be only
     # what we need. A float value occupies 4 bytes in memory using
