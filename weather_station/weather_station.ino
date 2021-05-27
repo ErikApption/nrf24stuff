@@ -1,5 +1,5 @@
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
 #include <SPI.h>
 #include "printf.h"
@@ -13,9 +13,6 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_TSL2561_U.h>
 #include "Adafruit_SI1145.h"
-//#include "SI114X.h"
-//#include "si7021.h"
-//#include <dhtnew.h>
 #include "DHT.h"
 
 #define TS_PIN 9
@@ -23,7 +20,7 @@
 #define NODE_ID 1
 #define DHT_PIN 5
 
-#define SLEEP_CYCLES_SUCCESS 150 //20 minutes on success - 
+#define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
 #define SLEEP_CYCLES 10 //80 seconds otherwise
 
 #define DHTTYPE DHT22
@@ -36,7 +33,7 @@ Adafruit_SI1145 uv = Adafruit_SI1145();
 
 //DHTNEW mySensor(DHT_PIN);
 // instantiate an object for the nRF24L01 transceiver
-RF24 radio(6, 7); // using pin 7 for the CE pin, and pin 8 for the CSN pin
+RF24 radio(7, 8); // using pin 7 for the CE pin, and pin 8 for the CSN pin
 
 // Let these addresses be used for the pair
 uint8_t receiver_address[6] = "1Node";
@@ -86,6 +83,30 @@ void displaySensorDetails(void)
 //  //mySI1145.enableHighResolutionVis();
 //  Debugln("SI1145 - forced ALS");
 //}
+
+long readVcc() {
+  // Read 1.1V reference against AVcc
+  // set the reference to Vcc and the measurement to the internal 1.1V reference
+  #if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+    ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  #elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
+     ADMUX = _BV(MUX5) | _BV(MUX0) ;
+  #else
+    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  #endif  
+ 
+  delay(2); // Wait for Vref to settle
+  ADCSRA |= _BV(ADSC); // Start conversion
+  while (bit_is_set(ADCSRA,ADSC)); // measuring
+ 
+  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH  
+  uint8_t high = ADCH; // unlocks both
+ 
+  long result = (high<<8) | low;
+ 
+  result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
+  return result; // Vcc in millivolts
+}
 
 /**************************************************************************/
 /*
@@ -157,7 +178,7 @@ void readTemp(void)
       Debug(" %\t");
       Debug("Temperature: ");
       Debug(temp_hum_val[1]);
-      Debug("Retries: ");
+      Debug(" Retries: ");
       Debug(retries);
       Debugln(" *C");
       break;
@@ -218,6 +239,10 @@ void loop() {
   //  delay(1000);
   delay(500);
 
+  Debug(F("Reading voltage "));
+  payload.voltage = readVcc();
+  Debugln(payload.voltage);
+
   Debugln(F("Reading temp"));
   readTemp();
 
@@ -267,8 +292,8 @@ void loop() {
     // because these examples are likely run with nodes in close proximity to
     // each other.
     //radio.setPALevel(RF24_PA_MAX);  // RF24_PA_MAX is default.
-    radio.setPALevel(RF24_PA_LOW); 
-    
+    radio.setPALevel(RF24_PA_LOW);
+
     // save on transmission time by setting the radio to only transmit the
     // number of bytes we need to transmit a float
     radio.setPayloadSize(sizeof(payload)); // float datatype occupies 4 bytes
@@ -296,33 +321,32 @@ void loop() {
 
     Debugln("Payload size: ");
     Debugln(sizeof(payload));
-    for (int retries = 0; retries < MAX_RADIO_RETRIES; retries++)
-    {
-      Debug("Radio Retries: ");
-      Debugln(retries);
-      payload.payloadID = retries;
-      radio.powerUp();
-      unsigned long start_timer = micros();                    // start the timer
-      bool report = radio.write(&payload, sizeof(payload));      // transmit & save the report
-      unsigned long end_timer = micros();                      // end the timer
 
-      if (report) {
-        Debug(F("Transmission successful! "));          // payload was delivered
-        Debug(F("Time to transmit = "));
-        Debug(end_timer - start_timer);                 // print the timer result
-        Debug(F(" us. Sent: "));
-        Debugln(payload.temp);                               // print payload sent
-        success = 1;
-        break;
-      } else {
-        success = 0;
-        Debugln(F("Transmission failed or timed out")); // payload was not delivered
-        delay(1000);
-        //radio.printPrettyDetails(); // (larger) function that prints human readable data
-      }
+    payload.payloadID = 0;
+    radio.powerUp();
+
+    Debugln("Payload size: ");
+    Debugln(sizeof(payload));
+    unsigned long start_timer = micros();                    // start the timer
+    radio.writeBlocking(&payload, sizeof(payload), 2000);      // transmit & save the report
+    bool report = radio.txStandBy(2000);
+    unsigned long end_timer = micros();                      // end the timer    
+
+    if (report) {
+      Debug(F("Transmission successful! "));          // payload was delivered
+      Debug(F("Time to transmit = "));
+      Debug(end_timer - start_timer);                 // print the timer result
+      Debug(F(" us. Sent: "));
+      Debugln(payload.temp);                               // print payload sent
+      success = 1;
+    } else {
+      success = 0;
+      Debugln(F("Transmission failed or timed out")); // payload was not delivered
+      //radio.printPrettyDetails(); // (larger) function that prints human readable data
     }
-    delay(100);
   }
+  delay(100);
+
   radio.powerDown();
   digitalWrite(TS_PIN, LOW); // sets the digital pin 13 on
   delay(100);
