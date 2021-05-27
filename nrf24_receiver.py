@@ -35,6 +35,13 @@ payloadID = 0;
 temp = 0.0;
 voltage = 0.0;
 
+# For this example, we will use different addresses
+# An address need to be a buffer protocol object (bytearray)
+node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
+node_roots =  ["hottub","weather","pool"]
+
+
+
 def slave(timeout=290):
     """Listen for any payloads and print the transaction
 
@@ -101,26 +108,39 @@ def slave(timeout=290):
             bufStart = bufEnd;
             bufEnd = bufStart + struct.calcsize('f');
             uv_index = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
-            published = False
-            volt = voltage / 73.78378
-            if (nodeID == 0):
-                ret1 = client.publish(root + "/DS18B20/Temperature", "{:0.2f}".format(temp))
-                ret2 = client.publish(root + "/Arduino/Voltage","{:0.2f}".format(voltage))
-                published = (ret1.rc == paho.MQTT_ERR_SUCCESS)
-                #print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
-            fullPath = os.path.expanduser('~/last_update.txt')
+
+            #debug
+            fullPath = os.path.expanduser("~/last_update_{}.txt".format(nodeID))
             with open(fullPath,'w') as last_update:
-                last_update.write("NodeID {} PayloadID {}".format(nodeID,payloadID))
+                last_update.write("Pipe {} NodeID {} PayloadID {}".format(pipe_number,nodeID,payloadID))
                 last_update.write("Temp: {0:0.1f} °C".format(temp) + "\n")
                 last_update.write("Voltage (abs): {0:0.1f}".format(voltage) + "\n")
-                last_update.write("Humidity {} LuxMeasure {} Ambiant Light {} Ambiant IR {}".format(humidity,luxMeasure,amb_als,amb_ir))
+                last_update.write("Humidity {} LuxMeasure {} Ambiant Light {} Ambiant IR {} UV {}".format(humidity,luxMeasure,amb_als,amb_ir,uv_index))
                 last_update.write("\n")
+
+            print ("{} Data T:{} V:{} H:{}% Lux:{} AL:{} IR:{} UV:{}".format(str(datetime.datetime.now()),temp,voltage,humidity,luxMeasure,amb_als,amb_ir,uv_index));
+
+            # publish data
+            published = False
+            ret1;
+            ret2 = client.publish(node_roots[nodeID] + "/Arduino/Voltage","{:0.2f}".format(voltage))
+            if (nodeID == 0 or nodeID == 2):
+                ret1 = client.publish(node_roots[nodeID] + "/DS18B20/Temperature", "{:0.2f}".format(temp))
+            elif nodeID == 1:
+                ret1 = client.publish(node_roots[nodeID] + "/DHT/Temperature", "{:0.2f}".format(temp))
+                ret7 = client.publish(node_roots[nodeID] + "/DHT/Humidity", "{:0.2f}".format(humidity))
+                ret3 = client.publish(node_roots[nodeID] + "/TSL2561/Lux","{:0.2f}".format(luxMeasure))
+                ret4 = client.publish(node_roots[nodeID] + "/GY1145/AL","{:0.2f}".format(amb_als))
+                ret5 = client.publish(node_roots[nodeID] + "/GY1145/IR","{:0.2f}".format(amb_ir))
+                ret6 = client.publish(node_roots[nodeID] + "/GY1145/UV","{:0.2f}".format(uv_index))
+            published = (ret1.rc == paho.MQTT_ERR_SUCCESS)
+                #print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
 
             # print details about the received packet
             print(
-                "{} Received {} bytes on pipe {}: {} + {} ({}) - Published {} - node {} / payload {}".format(
+                "{} Received {} bytes on pipe {} - Published {} - node {} - payload {}".format(
                     str(datetime.datetime.now()), radio.payloadSize,
-                    pipe_number, temp, volt, voltage, published,nodeID,payloadID
+                    pipe_number, published,nodeID,payloadID
                 )
             )
             #start_timer = time.monotonic()  # reset the timeout timer
@@ -135,15 +155,10 @@ if __name__ == "__main__":
     client = paho.Client()
     #client.on_publish = on_publish
     client.connect("openhab.local", 1883,60)
-    root = "hottub"
 
     # initialize the nRF24L01 on the spi bus
     if not radio.begin():
         raise RuntimeError("radio hardware is not responding")
-
-    # For this example, we will use different addresses
-    # An address need to be a buffer protocol object (bytearray)
-    address = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
 
     receiver_address = b"1Node";
     # It is very helpful to think of an address as a path instead of as
@@ -164,7 +179,7 @@ if __name__ == "__main__":
 
     # set the RX address of the TX node into a RX pipe
     # write the addresses to all pipes.
-    for pipe_n, addr in enumerate(address):
+    for pipe_n, addr in enumerate(node_addresses):
         radio.openReadingPipe(pipe_n, addr)    
 
     # To save time during transmission, we'll set the payload size to be only
