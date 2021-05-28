@@ -40,9 +40,7 @@ voltage = 0.0;
 node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
 node_roots =  ["hottub","weather","pool"]
 
-
-
-def slave(timeout=290):
+def slave(timeout=298):
     """Listen for any payloads and print the transaction
 
     :param int timeout: The number of seconds to wait (with no transmission)
@@ -113,16 +111,16 @@ def slave(timeout=290):
             fullPath = os.path.expanduser("~/last_update_{}.txt".format(nodeID))
             with open(fullPath,'w') as last_update:
                 last_update.write("Pipe {} NodeID {} PayloadID {}".format(pipe_number,nodeID,payloadID))
-                last_update.write("Temp: {0:0.1f} °C".format(temp) + "\n")
+                last_update.write(" Temp: {0:0.1f} °C".format(temp) + "\n")
                 last_update.write("Voltage (abs): {0:0.1f}".format(voltage) + "\n")
                 last_update.write("Humidity {} LuxMeasure {} Ambiant Light {} Ambiant IR {} UV {}".format(humidity,luxMeasure,amb_als,amb_ir,uv_index))
                 last_update.write("\n")
 
-            print ("{} Data T:{} V:{} H:{}% Lux:{} AL:{} IR:{} UV:{}".format(str(datetime.datetime.now()),temp,voltage,humidity,luxMeasure,amb_als,amb_ir,uv_index));
+            print ("{} {} Data T:{} V:{} H:{}% Lux:{} AL:{} IR:{} UV:{}".format(str(datetime.datetime.now()),pipe_number,temp,voltage,humidity,luxMeasure,amb_als,amb_ir,uv_index));
 
             # publish data
             published = False
-            ret1;
+            ret1 = None;
             ret2 = client.publish(node_roots[nodeID] + "/Arduino/Voltage","{:0.2f}".format(voltage))
             if (nodeID == 0 or nodeID == 2):
                 ret1 = client.publish(node_roots[nodeID] + "/DS18B20/Temperature", "{:0.2f}".format(temp))
@@ -132,15 +130,14 @@ def slave(timeout=290):
                 ret3 = client.publish(node_roots[nodeID] + "/TSL2561/Lux","{:0.2f}".format(luxMeasure))
                 ret4 = client.publish(node_roots[nodeID] + "/GY1145/AL","{:0.2f}".format(amb_als))
                 ret5 = client.publish(node_roots[nodeID] + "/GY1145/IR","{:0.2f}".format(amb_ir))
-                ret6 = client.publish(node_roots[nodeID] + "/GY1145/UV","{:0.2f}".format(uv_index))
+                ret6 = client.publish(node_roots[nodeID] + "/GY1145/UV","{:0.3f}".format(uv_index/100.0))
             published = (ret1.rc == paho.MQTT_ERR_SUCCESS)
                 #print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
 
             # print details about the received packet
             print(
-                "{} Received {} bytes on pipe {} - Published {} - node {} - payload {}".format(
-                    str(datetime.datetime.now()), radio.payloadSize,
-                    pipe_number, published,nodeID,payloadID
+                "{} {} Received {} bytes Published {} - node {} - payload {}".format(
+                    str(datetime.datetime.now()), pipe_number, radio.payloadSize, published,nodeID,payloadID
                 )
             )
             #start_timer = time.monotonic()  # reset the timeout timer
