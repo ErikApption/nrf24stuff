@@ -291,8 +291,11 @@ void loop() {
     // Set the PA Level low to try preventing power supply related problems
     // because these examples are likely run with nodes in close proximity to
     // each other.
-    //radio.setPALevel(RF24_PA_MAX);  // RF24_PA_MAX is default.
-    radio.setPALevel(RF24_PA_LOW);
+    #ifdef DEBUG_MODE
+      radio.setPALevel(RF24_PA_LOW);
+    #else
+      radio.setPALevel(RF24_PA_MAX);  // RF24_PA_MAX is default.
+    #endif
 
     // save on transmission time by setting the radio to only transmit the
     // number of bytes we need to transmit a float
@@ -342,7 +345,7 @@ void loop() {
     } else {
       success = 0;
       Debugln(F("Transmission failed or timed out")); // payload was not delivered
-      //radio.printPrettyDetails(); // (larger) function that prints human readable data
+      //radio.printPrettyDetails(); // (larger) function that prints human readable data`
     }
   }
   delay(100);
