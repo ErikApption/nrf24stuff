@@ -1,3 +1,4 @@
+//#define DEBUG_MODE
 
 #include <SPI.h>
 #include "printf.h"
@@ -11,11 +12,11 @@
 #define ONE_WIRE_BUS 6
 #define TS_PIN 9
 #define MAX_RADIO_RETRIES 10
-#define NODE_ID 0
+#define NODE_ID 2
 
 #define TX_TIMEOUT 2000
 
-//#define DEBUG_MODE
+
 #define SLEEP_CYCLES_SUCCESS 150 //20 minutes on success - 
 #define SLEEP_CYCLES 10 //80 seconds otherwise
 
