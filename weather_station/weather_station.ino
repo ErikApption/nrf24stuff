@@ -1,4 +1,3 @@
-
 //#define DEBUG_MODE
 
 #include <SPI.h>
@@ -16,6 +15,8 @@
 #include "DHT.h"
 
 #define TS_PIN 9
+#define TS_POWER_PIN 4
+#define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
 #define NODE_ID 1
 #define DHT_PIN 5
@@ -33,7 +34,7 @@ Adafruit_SI1145 uv = Adafruit_SI1145();
 
 //DHTNEW mySensor(DHT_PIN);
 // instantiate an object for the nRF24L01 transceiver
-RF24 radio(7, 8); // using pin 7 for the CE pin, and pin 8 for the CSN pin
+RF24 radio(6, 7); // using pin 7 for the CE pin, and pin 8 for the CSN pin
 
 // Let these addresses be used for the pair
 uint8_t receiver_address[6] = "1Node";
@@ -108,6 +109,20 @@ long readVcc() {
   return result; // Vcc in millivolts
 }
 
+long readVccExternal()
+{
+  digitalWrite(TS_POWER_PIN, HIGH);  
+  delay(10);
+  long val = analogRead (VCC_PIN);
+  //Debug(F("Raw voltage="));
+  //Debug(val);  
+  //8.13 = 247
+  //8130
+  digitalWrite(TS_POWER_PIN, LOW);  
+  long volt = val * 8130L / 247L;
+  return volt;
+}
+
 /**************************************************************************/
 /*
     Configures the gain and integration time for the TSL2561
@@ -116,9 +131,9 @@ long readVcc() {
 void configureLightSensor(void)
 {
   /* You can also manually set the gain or enable auto-gain support */
-  // tsl.setGain(TSL2561_GAIN_1X);      /* No gain ... use in bright light to avoid sensor saturation */
+  tsl.setGain(TSL2561_GAIN_1X);      /* No gain ... use in bright light to avoid sensor saturation */
   // tsl.setGain(TSL2561_GAIN_16X);     /* 16x gain ... use in low light to boost sensitivity */
-  tsl.enableAutoRange(true);            /* Auto-gain ... switches automatically between 1x and 16x */
+  //tsl.enableAutoRange(true);            /* Auto-gain ... switches automatically between 1x and 16x */
 
   /* Changing the integration time gives you better sensor resolution (402ms = 16-bit data) */
   //tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);      /* fast but low resolution */
@@ -126,10 +141,10 @@ void configureLightSensor(void)
   // tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_402MS);  /* 16-bit data but slowest conversions */
 
   /* Update these values depending on what you've set above! */
-  Debugln("------------------------------------");
-  Debug  ("Gain:         "); Debugln("Auto");
-  Debug  ("Timing:       "); Debugln("13 ms");
-  Debugln("------------------------------------");
+//  Debugln("------------------------------------");
+//  Debug  ("Gain:         "); Debugln("Auto");
+//  Debug  ("Timing:       "); Debugln("13 ms");
+//  Debugln("------------------------------------");
 }
 
 void setup() {
@@ -147,7 +162,8 @@ void setup() {
 
   Debugln(F("Configuring Transistor Pin"));
   pinMode(TS_PIN, OUTPUT);    // sets the digital pin 13 as output
-
+  pinMode(TS_POWER_PIN, OUTPUT);
+  pinMode(VCC_PIN, INPUT);
   Debugln(F("Ready..."));
 
 } // setup
@@ -163,9 +179,14 @@ void readTemp(void)
   //      Debugln(mySensor.getTemperature(), 1);
 
   dht.begin();
+  payload.humidity = NAN;
+  payload.temp = NAN;  
   float temp_hum_val[2] = {0};
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  LowPower.idle(SLEEP_2S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
+                SPI_OFF, USART0_OFF, TWI_OFF);
+
 
   int retries = 0;
   for (retries; retries < MAX_TEMP_RETRIES; retries++)
@@ -184,6 +205,7 @@ void readTemp(void)
       break;
     } else {
       Debugln("Failed to get temprature and humidity value.");
+      delay(50);
     }
   }
 
@@ -237,14 +259,11 @@ void loop() {
   digitalWrite(TS_PIN, HIGH); // sets the digital pin 13 on
   //for (int il = 0; il < 20;il++)
   //  delay(1000);
-  delay(500);
 
   Debug(F("Reading voltage "));
-  payload.voltage = readVcc();
+  //payload.voltage = readVcc();
+  payload.voltage = readVccExternal();
   Debugln(payload.voltage);
-
-  Debugln(F("Reading temp"));
-  readTemp();
 
   Debugln(F("TSL Sensor"));
   if (tsl.begin())
@@ -272,10 +291,14 @@ void loop() {
 
   readUVSensor();
 
+  Debugln(F("Reading temp"));
+  readTemp();
+
   Debugln(F("Sending Radio packet"));
   int radioReady = 1;
   int sensorReady = 1;
   int success = 0;
+  //delay(100);
   // initialize the transceiver on the SPI bus
   if (!radio.begin()) {
     Debugln(F("radio hardware is not responding!!"));
@@ -283,8 +306,7 @@ void loop() {
   }
   else
   {
-    Debugln(F("-----------------"));
-    Debugln(F("Radio initialized"));
+    Debugln(F("++++++++++++ Radio initialized"));
 
     radio.setChannel(5);
     //radio.setAutoAck(false); //https://github.com/nRF24/RF24/issues/685
@@ -352,7 +374,7 @@ void loop() {
 
   radio.powerDown();
   digitalWrite(TS_PIN, LOW); // sets the digital pin 13 on
-  delay(100);
+  //delay(100);
 
   Debugln("Starting sleep");
 #ifdef DEBUG_MODE
