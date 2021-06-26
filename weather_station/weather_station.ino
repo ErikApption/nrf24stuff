@@ -11,8 +11,9 @@
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_TSL2561_U.h>
-#include "Adafruit_SI1145.h"
-#include "DHT.h"
+#include <Adafruit_SI1145.h>
+#include <Adafruit_INA219.h>
+#include <DHT.h>
 
 #define TS_PIN 9
 #define TS_POWER_PIN 4
@@ -31,6 +32,8 @@ DHT dht(DHT_PIN, DHTTYPE);
 Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
 
 Adafruit_SI1145 uv = Adafruit_SI1145();
+
+Adafruit_INA219 ina219;
 
 //DHTNEW mySensor(DHT_PIN);
 // instantiate an object for the nRF24L01 transceiver
@@ -88,37 +91,65 @@ void displaySensorDetails(void)
 long readVcc() {
   // Read 1.1V reference against AVcc
   // set the reference to Vcc and the measurement to the internal 1.1V reference
-  #if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  #elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
-     ADMUX = _BV(MUX5) | _BV(MUX0) ;
-  #else
-    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  #endif  
- 
+#if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+  ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+#elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
+  ADMUX = _BV(MUX5) | _BV(MUX0) ;
+#else
+  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+#endif
+
   delay(2); // Wait for Vref to settle
   ADCSRA |= _BV(ADSC); // Start conversion
-  while (bit_is_set(ADCSRA,ADSC)); // measuring
- 
-  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH  
+  while (bit_is_set(ADCSRA, ADSC)); // measuring
+
+  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH
   uint8_t high = ADCH; // unlocks both
- 
-  long result = (high<<8) | low;
- 
+
+  long result = (high << 8) | low;
+
   result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
   return result; // Vcc in millivolts
 }
 
+long readVccINA219()
+{
+  if (ina219.begin()) {
+
+    float shuntvoltage = 0;
+    float busvoltage = 0;
+    float current_mA = 0;
+    float loadvoltage = 0;
+    float power_mW = 0;
+
+    shuntvoltage = ina219.getShuntVoltage_mV();
+    busvoltage = ina219.getBusVoltage_V();
+    current_mA = ina219.getCurrent_mA();
+    power_mW = ina219.getPower_mW();
+    loadvoltage = busvoltage + (shuntvoltage / 1000);
+
+#ifdef DEBUG_MODE
+    Serial.print("Bus Voltage:   "); Serial.print(busvoltage); Serial.println(" V");
+    Serial.print("Shunt Voltage: "); Serial.print(shuntvoltage); Serial.println(" mV");
+    Serial.print("Load Voltage:  "); Serial.print(loadvoltage); Serial.println(" V");
+    Serial.print("Current:       "); Serial.print(current_mA); Serial.println(" mA");
+    Serial.print("Power:         "); Serial.print(power_mW); Serial.println(" mW");
+#endif
+    return (long)(loadvoltage * 1000.0L);
+  }
+  return -1;
+}
+
 long readVccExternal()
 {
-  digitalWrite(TS_POWER_PIN, HIGH);  
+  digitalWrite(TS_POWER_PIN, HIGH);
   delay(10);
   long val = analogRead (VCC_PIN);
   //Debug(F("Raw voltage="));
-  //Debug(val);  
+  //Debug(val);
   //8.13 = 247
   //8130
-  digitalWrite(TS_POWER_PIN, LOW);  
+  digitalWrite(TS_POWER_PIN, LOW);
   long volt = val * 8130L / 247L;
   return volt;
 }
@@ -141,10 +172,10 @@ void configureLightSensor(void)
   // tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_402MS);  /* 16-bit data but slowest conversions */
 
   /* Update these values depending on what you've set above! */
-//  Debugln("------------------------------------");
-//  Debug  ("Gain:         "); Debugln("Auto");
-//  Debug  ("Timing:       "); Debugln("13 ms");
-//  Debugln("------------------------------------");
+  //  Debugln("------------------------------------");
+  //  Debug  ("Gain:         "); Debugln("Auto");
+  //  Debug  ("Timing:       "); Debugln("13 ms");
+  //  Debugln("------------------------------------");
 }
 
 void setup() {
@@ -180,7 +211,7 @@ void readTemp(void)
 
   dht.begin();
   payload.humidity = NAN;
-  payload.temp = NAN;  
+  payload.temp = NAN;
   float temp_hum_val[2] = {0};
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
@@ -262,7 +293,7 @@ void loop() {
 
   Debug(F("Reading voltage "));
   //payload.voltage = readVcc();
-  payload.voltage = readVccExternal();
+  payload.voltage = readVccINA219();
   Debugln(payload.voltage);
 
   Debugln(F("TSL Sensor"));
@@ -313,11 +344,11 @@ void loop() {
     // Set the PA Level low to try preventing power supply related problems
     // because these examples are likely run with nodes in close proximity to
     // each other.
-    #ifdef DEBUG_MODE
-      radio.setPALevel(RF24_PA_LOW);
-    #else
-      radio.setPALevel(RF24_PA_MAX);  // RF24_PA_MAX is default.
-    #endif
+#ifdef DEBUG_MODE
+    radio.setPALevel(RF24_PA_LOW);
+#else
+    radio.setPALevel(RF24_PA_MAX);  // RF24_PA_MAX is default.
+#endif
 
     // save on transmission time by setting the radio to only transmit the
     // number of bytes we need to transmit a float
@@ -355,7 +386,7 @@ void loop() {
     unsigned long start_timer = micros();                    // start the timer
     radio.writeBlocking(&payload, sizeof(payload), 2000);      // transmit & save the report
     bool report = radio.txStandBy(2000);
-    unsigned long end_timer = micros();                      // end the timer    
+    unsigned long end_timer = micros();                      // end the timer
 
     if (report) {
       Debug(F("Transmission successful! "));          // payload was delivered
