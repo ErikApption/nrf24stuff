@@ -81,6 +81,9 @@ def slave(timeout=298):
             bufStart = bufEnd;
             bufEnd = bufStart + struct.calcsize('f');
             voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+            #convert mv to V
+            if voltage > 0:
+               voltage = voltage * 1.0 / 1000.0
 
             #float humidity;
             bufStart = bufEnd;
