@@ -14,26 +14,33 @@
 #include <Adafruit_SI1145.h>
 #include <Adafruit_INA219.h>
 #include <DHT.h>
+#include <DHT_U.h>
 
 #define TS_PIN 9
 #define TS_POWER_PIN 4
 #define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
+#define MAX_TEMP_RETRIES 2
 #define NODE_ID 1
 #define DHT_PIN 5
 
 #define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
 #define SLEEP_CYCLES 10 //80 seconds otherwise
 
-#define DHTTYPE DHT22
+#define DHTTYPE DHT21
 
-DHT dht(DHT_PIN, DHTTYPE);
+//DHT dht(DHT_PIN, DHTTYPE);
 
 Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
 
 Adafruit_SI1145 uv = Adafruit_SI1145();
 
 Adafruit_INA219 ina219;
+
+DHT_Unified dht(DHT_PIN, DHTTYPE);
+
+uint32_t delayMS;
+
 
 //DHTNEW mySensor(DHT_PIN);
 // instantiate an object for the nRF24L01 transceiver
@@ -199,7 +206,6 @@ void setup() {
 
 } // setup
 
-#define MAX_TEMP_RETRIES 5
 //float SI7021_temperature = NAN;
 //float SI7021_humidity = NAN;
 void readTemp(void)
@@ -209,27 +215,62 @@ void readTemp(void)
   //      Debug("\t");
   //      Debugln(mySensor.getTemperature(), 1);
 
-  dht.begin();
+  // Print temperature sensor details.
+  
+#ifdef DEBUG_MODE
+  sensor_t sensor;
+  dht.temperature().getSensor(&sensor);
+  Serial.println(F("------------------------------------"));
+  Serial.println(F("Temperature Sensor"));
+  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
+  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
+  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
+  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("°C"));
+  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("°C"));
+  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("°C"));
+  Serial.println(F("------------------------------------"));
+  // Print humidity sensor details.
+  dht.humidity().getSensor(&sensor);
+  Serial.println(F("Humidity Sensor"));
+  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
+  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
+  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
+  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("%"));
+  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("%"));
+  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("%"));
+  Serial.print  (F("Delay:       ")); Serial.print(sensor.min_delay); Serial.println(F("us"));
+  Serial.println(F("------------------------------------"));
+  // Set delay between sensor readings based on sensor details.
+  delayMS = sensor.min_delay / 1000;
+#else
+  delayMS = 2000;
+#endif
   payload.humidity = NAN;
   payload.temp = NAN;
-  float temp_hum_val[2] = {0};
+
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  LowPower.idle(SLEEP_2S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
-                SPI_OFF, USART0_OFF, TWI_OFF);
-
 
   int retries = 0;
   for (retries; retries < MAX_TEMP_RETRIES; retries++)
   {
-    if (!dht.readTempAndHumidity(temp_hum_val)) {
-      payload.humidity = temp_hum_val[0];
-      payload.temp = temp_hum_val[1];
+
+    // Delay between measurements.
+    //delay(delayMS*2);
+    LowPower.idle(SLEEP_2S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
+                  SPI_OFF, USART0_OFF, TWI_OFF);
+    // Get temperature event and print its value.
+    sensors_event_t event;
+    dht.temperature().getEvent(&event);
+
+    if (!isnan(event.relative_humidity) || !isnan(event.temperature)) {
+      payload.humidity = event.relative_humidity;
+      payload.temp = event.temperature;
       Debug("Humidity: ");
-      Debug(temp_hum_val[0]);
+      Debug(payload.humidity);
       Debug(" %\t");
       Debug("Temperature: ");
-      Debug(temp_hum_val[1]);
+      Debug(payload.temp);
       Debug(" Retries: ");
       Debug(retries);
       Debugln(" *C");
