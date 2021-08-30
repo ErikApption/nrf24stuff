@@ -41,8 +41,6 @@ DHT_Unified dht(DHT_PIN, DHTTYPE);
 
 uint32_t delayMS;
 
-
-//DHTNEW mySensor(DHT_PIN);
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(6, 7); // using pin 7 for the CE pin, and pin 8 for the CSN pin
 
@@ -204,22 +202,9 @@ void setup() {
   pinMode(VCC_PIN, INPUT);
   Debugln(F("Ready..."));
 
-} // setup
-
-//float SI7021_temperature = NAN;
-//float SI7021_humidity = NAN;
-void readTemp(void)
-{
-  //      mySensor.read();
-  //      Debug(mySensor.getHumidity(), 1);
-  //      Debug("\t");
-  //      Debugln(mySensor.getTemperature(), 1);
-
-  // Print temperature sensor details.
-  
-#ifdef DEBUG_MODE
   sensor_t sensor;
   dht.temperature().getSensor(&sensor);
+#ifdef DEBUG_MODE
   Serial.println(F("------------------------------------"));
   Serial.println(F("Temperature Sensor"));
   Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
@@ -229,7 +214,9 @@ void readTemp(void)
   Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("°C"));
   Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("°C"));
   Serial.println(F("------------------------------------"));
+#endif
   // Print humidity sensor details.
+#ifdef DEBUG_MODE
   dht.humidity().getSensor(&sensor);
   Serial.println(F("Humidity Sensor"));
   Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
@@ -240,45 +227,71 @@ void readTemp(void)
   Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("%"));
   Serial.print  (F("Delay:       ")); Serial.print(sensor.min_delay); Serial.println(F("us"));
   Serial.println(F("------------------------------------"));
-  // Set delay between sensor readings based on sensor details.
-  delayMS = sensor.min_delay / 1000;
-#else
-  delayMS = 2000;
 #endif
+  //  // Set delay between sensor readings based on sensor details.
+  delayMS = sensor.min_delay / 1000;
+
+
+} // setup
+
+//float SI7021_temperature = NAN;
+//float SI7021_humidity = NAN;
+void readTemp(void)
+{
+  dht.begin();  
+  //      mySensor.read();
+  //      Debug(mySensor.getHumidity(), 1);
+  //      Debug("\t");
+  //      Debugln(mySensor.getTemperature(), 1);
+
+  // Print temperature sensor details.
+
+//#ifdef DEBUG_MODE
+//#else
+//  delayMS = 2000;
+//#endif
   payload.humidity = NAN;
   payload.temp = NAN;
 
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
 
+  int success = 0;
   int retries = 0;
   for (retries; retries < MAX_TEMP_RETRIES; retries++)
   {
 
     // Delay between measurements.
-    //delay(delayMS*2);
+    //delay(delayMS);
     LowPower.idle(SLEEP_2S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
                   SPI_OFF, USART0_OFF, TWI_OFF);
+    
     // Get temperature event and print its value.
     sensors_event_t event;
     dht.temperature().getEvent(&event);
 
-    if (!isnan(event.relative_humidity) || !isnan(event.temperature)) {
-      payload.humidity = event.relative_humidity;
+    if (!isnan(event.temperature)) {
       payload.temp = event.temperature;
-      Debug("Humidity: ");
-      Debug(payload.humidity);
-      Debug(" %\t");
       Debug("Temperature: ");
       Debug(payload.temp);
-      Debug(" Retries: ");
-      Debug(retries);
       Debugln(" *C");
-      break;
+      success++;
     } else {
-      Debugln("Failed to get temprature and humidity value.");
-      delay(50);
+      Debugln("Failed to get temprature value.");
     }
+    dht.humidity().getEvent(&event);
+    if (!isnan(event.temperature)) {
+      payload.humidity = event.relative_humidity;
+      Debug("Humidity: ");
+      Debug(payload.humidity);
+      success++;
+    } else {
+      Debugln("Failed to get humidity value.");
+    }
+    Debug(" Retries: ");
+    Debug(retries);
+    if (success == 2) break;
+
   }
 
 }
@@ -324,19 +337,8 @@ void readUVSensor(void) {
   }
 }
 
-
-void loop() {
-
-
-  digitalWrite(TS_PIN, HIGH); // sets the digital pin 13 on
-  //for (int il = 0; il < 20;il++)
-  //  delay(1000);
-
-  Debug(F("Reading voltage "));
-  //payload.voltage = readVcc();
-  payload.voltage = readVccINA219();
-  Debugln(payload.voltage);
-
+void readTLSSensor()
+{
   Debugln(F("TSL Sensor"));
   if (tsl.begin())
   {
@@ -360,7 +362,21 @@ void loop() {
   {
     Debugln(F("No TSL sensor found ... check your wiring?"));
   }
+}
 
+void loop() {
+
+
+  digitalWrite(TS_PIN, HIGH); // sets the digital pin 13 on
+  //for (int il = 0; il < 20;il++)
+  //  delay(1000);
+
+  Debug(F("Reading voltage "));
+  //payload.voltage = readVcc();
+  //payload.voltage = readVccINA219();
+  Debugln(payload.voltage);
+
+  readTLSSensor();
   readUVSensor();
 
   Debugln(F("Reading temp"));
@@ -422,8 +438,6 @@ void loop() {
     payload.payloadID = 0;
     radio.powerUp();
 
-    Debugln("Payload size: ");
-    Debugln(sizeof(payload));
     unsigned long start_timer = micros();                    // start the timer
     radio.writeBlocking(&payload, sizeof(payload), 2000);      // transmit & save the report
     bool report = radio.txStandBy(2000);
