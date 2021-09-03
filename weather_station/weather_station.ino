@@ -372,7 +372,7 @@ void loop() {
   //  delay(1000);
 
   Debug(F("Reading voltage "));
-  //payload.voltage = readVcc();
+  payload.voltage = readVcc();
   //payload.voltage = readVccINA219();
   Debugln(payload.voltage);
 
