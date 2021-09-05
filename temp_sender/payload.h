@@ -8,4 +8,6 @@ typedef struct {
   unsigned int amb_als;
   unsigned int amb_ir;  
   float uv_index;
+  // float uv_a;
+  // float uv_b;  
 } PayLoad;

@@ -15,8 +15,10 @@
 #include <Adafruit_INA219.h>
 #include <DHT.h>
 #include <DHT_U.h>
+#include "Adafruit_VEML6075.h"
 
-#define TS_PIN 9
+#define AM_PIN 9
+#define UV_PIN 10
 #define TS_POWER_PIN 4
 #define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
@@ -31,10 +33,11 @@
 
 //DHT dht(DHT_PIN, DHTTYPE);
 
-Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
+Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345); // ambiant light sensor
 
-Adafruit_SI1145 uv = Adafruit_SI1145();
+//Adafruit_VEML6075 uv = Adafruit_VEML6075();
 
+Adafruit_SI1145 uv = Adafruit_SI1145();// SI1145 Digital UV Index / IR / Visible Light Sensor
 Adafruit_INA219 ina219;
 
 DHT_Unified dht(DHT_PIN, DHTTYPE);
@@ -76,22 +79,6 @@ void displaySensorDetails(void)
   Debugln("");
   delay(500);
 }
-
-//void configureGY1145Sensor(void)
-//{
-//  mySI1145.init();
-//  //mySI1145.enableHighSignalVisRange();
-//  //mySI1145.enableHighSignalIrRange();
-//
-//  /* choices: PS_TYPE, ALS_TYPE, PSALS_TYPE, ALSUV_TYPE, PSALSUV_TYPE || FORCE, AUTO, PAUSE */
-//  mySI1145.enableMeasurements(ALS_TYPE, FORCE);
-//
-//   /* choose gain value: 0, 1, 2, 3, 4, 5, 6, 7 */
-//  mySI1145.setAlsVisAdcGain(0);
-//
-//  //mySI1145.enableHighResolutionVis();
-//  Debugln("SI1145 - forced ALS");
-//}
 
 long readVcc() {
   // Read 1.1V reference against AVcc
@@ -197,7 +184,8 @@ void setup() {
   Debugln(F("Starting Weather Station"));
 
   Debugln(F("Configuring Transistor Pin"));
-  pinMode(TS_PIN, OUTPUT);    // sets the digital pin 13 as output
+  pinMode(AM_PIN, OUTPUT);    // sets the digital pin 13 as output
+  pinMode(UV_PIN, OUTPUT);    // sets the digital pin 13 as output
   pinMode(TS_POWER_PIN, OUTPUT);
   pinMode(VCC_PIN, INPUT);
   Debugln(F("Ready..."));
@@ -296,7 +284,47 @@ void readTemp(void)
 
 }
 
-void readUVSensor(void) {
+//void readUV_VEML6075()
+//{
+//  if (! uv.begin()) {
+//    Debugln("Didn't find VEML6075");
+//  }
+//  else
+//  {
+//
+//    byte failureCode = 0;
+//    payload.uv_a = 0;
+//    payload.uv_b = 0;
+//    payload.uv_i = 0;
+//
+//    Debugln("=Reading VEML6075=");
+//
+//    // Set the integration constant
+//    uv.setIntegrationTime(VEML6075_100MS);
+//    // Set the high dynamic mode
+//    uv.setHighDynamic(true);
+//    // Set the mode
+//    uv.setForcedMode(false);
+//
+//    // Set the calibration coefficients
+//    uv.setCoefficients(2.22, 1.33,  // UVA_A and UVA_B coefficients
+//                       2.95, 1.74,  // UVB_C and UVB_D coefficients
+//                       0.001461, 0.002591); // UVA and UVB responses
+//
+//    payload.uv_a = uv.readUVA();
+//    payload.uv_b = uv.readUVB();
+//    payload.uv_i = uv.readUVI();
+//    Debug("Raw UVA reading:  "); Debugln(payload.uv_a);
+//    Debug("Raw UVB reading:  "); Debugln(payload.uv_b);
+//    Debug("UV Index reading: "); Debugln(payload.uv_i);  
+//
+//  }  
+//}
+
+//
+// Code for SI1145 Sensor
+//
+void readUVSI1145(void) {
   if (! uv.begin()) {
     Debugln("Didn't find Si1145");
   }
@@ -367,7 +395,8 @@ void readTLSSensor()
 void loop() {
 
 
-  digitalWrite(TS_PIN, HIGH); // sets the digital pin 13 on
+  digitalWrite(AM_PIN, HIGH); // sets the digital pin on to power AM2301
+  digitalWrite(UV_PIN, HIGH); // sets the digital pin on to power UV & Light sensor
   //for (int il = 0; il < 20;il++)
   //  delay(1000);
 
@@ -376,8 +405,9 @@ void loop() {
   //payload.voltage = readVccINA219();
   Debugln(payload.voltage);
 
+  //readUV_VEML6075();
   readTLSSensor();
-  readUVSensor();
+  readUVSI1145();
 
   Debugln(F("Reading temp"));
   readTemp();
@@ -459,7 +489,9 @@ void loop() {
   delay(100);
 
   radio.powerDown();
-  digitalWrite(TS_PIN, LOW); // sets the digital pin 13 on
+  digitalWrite(AM_PIN, LOW); // sets the digital pin 13 on
+  digitalWrite(UV_PIN, LOW); // sets the digital pin on to power UV & Light sensor
+  
   //delay(100);
 
   Debugln("Starting sleep");
@@ -470,8 +502,9 @@ void loop() {
 #endif
 
   for (int il = 0; il < sleep_time; il++)
-    LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
-                  SPI_OFF, USART0_OFF, TWI_OFF);
+    LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
+//    LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
+//                  SPI_OFF, USART0_OFF, TWI_OFF);
 
   Debugln("Sleep completed");
   // to make this example readable in the serial monitor
