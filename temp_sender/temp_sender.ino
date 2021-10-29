@@ -1,4 +1,6 @@
 
+//#define DEBUG_MODE
+
 #include <SPI.h>
 #include "printf.h"
 #include "RF24.h"
@@ -8,7 +10,7 @@
 #include "payload.h"
 #include "debug_stuff.h"
 
-#define ONE_WIRE_BUS 6
+#define ONE_WIRE_BUS 5
 #define TS_PIN 9
 #define MAX_RADIO_RETRIES 10
 #define NODE_ID 0
@@ -22,7 +24,7 @@
 OneWire oneWire(ONE_WIRE_BUS);
 DS18B20 sensor(&oneWire);
 // instantiate an object for the nRF24L01 transceiver
-RF24 radio(7, 8); // using pin 7 for the CE pin, and pin 8 for the CSN pin
+RF24 radio(6, 8); // using pin 7 for the CE pin, and pin 8 for the CSN pin
 
 // Let these addresses be used for the pair
 uint8_t receiver_address[6] = "1Node";
@@ -56,7 +58,37 @@ void setup() {
 
 } // setup
 
+long readVcc() {
+  // Read 1.1V reference against AVcc
+  // set the reference to Vcc and the measurement to the internal 1.1V reference
+#if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+  ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+#elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
+  ADMUX = _BV(MUX5) | _BV(MUX0) ;
+#else
+  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+#endif
+
+  delay(2); // Wait for Vref to settle
+  ADCSRA |= _BV(ADSC); // Start conversion
+  while (bit_is_set(ADCSRA, ADSC)); // measuring
+
+  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH
+  uint8_t high = ADCH; // unlocks both
+
+  long result = (high << 8) | low;
+
+  result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
+  return result; // Vcc in millivolts
+}
+
+
+
 void loop() {
+
+  Debug(F("Reading voltage "));
+  payload.voltage = readVcc();
+  Debugln(payload.voltage);
 
   digitalWrite(TS_PIN, HIGH); // sets the digital pin 13 on
   //for (int il = 0; il < 20;il++)
@@ -112,7 +144,7 @@ void loop() {
       sensor.requestTemperatures();
       while (!sensor.isConversionComplete());  // wait until sensor is ready
       payload.temp = sensor.getTempC();
-      payload.voltage = analogRead(A1);
+      //payload.voltage = analogRead(A1);
       payload.nodeID = NODE_ID;
       Debug("Temp: ");
       Debugln(payload.temp);
@@ -156,9 +188,11 @@ void loop() {
 #endif
 
   for (int il = 0; il < sleep_time; il++)
-    LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
-                  SPI_OFF, USART0_OFF, TWI_OFF);
+      LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
+//    LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
+//                  SPI_OFF, USART0_OFF, TWI_OFF);
 
+ 
   Debugln("Sleep completed");
   // to make this example readable in the serial monitor
 

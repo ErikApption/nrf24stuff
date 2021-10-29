@@ -14,28 +14,36 @@
 #include <Adafruit_SI1145.h>
 #include <Adafruit_INA219.h>
 #include <DHT.h>
+#include <DHT_U.h>
+#include "Adafruit_VEML6075.h"
 
-#define TS_PIN 9
+#define AM_PIN 9
+#define UV_PIN 10
 #define TS_POWER_PIN 4
 #define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
+#define MAX_TEMP_RETRIES 2
 #define NODE_ID 1
 #define DHT_PIN 5
 
 #define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
 #define SLEEP_CYCLES 10 //80 seconds otherwise
 
-#define DHTTYPE DHT22
+#define DHTTYPE DHT21
 
-DHT dht(DHT_PIN, DHTTYPE);
+//DHT dht(DHT_PIN, DHTTYPE);
 
-Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
+Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345); // ambiant light sensor
 
-Adafruit_SI1145 uv = Adafruit_SI1145();
+//Adafruit_VEML6075 uv = Adafruit_VEML6075();
 
+Adafruit_SI1145 uv = Adafruit_SI1145();// SI1145 Digital UV Index / IR / Visible Light Sensor
 Adafruit_INA219 ina219;
 
-//DHTNEW mySensor(DHT_PIN);
+DHT_Unified dht(DHT_PIN, DHTTYPE);
+
+uint32_t delayMS;
+
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(6, 7); // using pin 7 for the CE pin, and pin 8 for the CSN pin
 
@@ -71,22 +79,6 @@ void displaySensorDetails(void)
   Debugln("");
   delay(500);
 }
-
-//void configureGY1145Sensor(void)
-//{
-//  mySI1145.init();
-//  //mySI1145.enableHighSignalVisRange();
-//  //mySI1145.enableHighSignalIrRange();
-//
-//  /* choices: PS_TYPE, ALS_TYPE, PSALS_TYPE, ALSUV_TYPE, PSALSUV_TYPE || FORCE, AUTO, PAUSE */
-//  mySI1145.enableMeasurements(ALS_TYPE, FORCE);
-//
-//   /* choose gain value: 0, 1, 2, 3, 4, 5, 6, 7 */
-//  mySI1145.setAlsVisAdcGain(0);
-//
-//  //mySI1145.enableHighResolutionVis();
-//  Debugln("SI1145 - forced ALS");
-//}
 
 long readVcc() {
   // Read 1.1V reference against AVcc
@@ -192,57 +184,147 @@ void setup() {
   Debugln(F("Starting Weather Station"));
 
   Debugln(F("Configuring Transistor Pin"));
-  pinMode(TS_PIN, OUTPUT);    // sets the digital pin 13 as output
+  pinMode(AM_PIN, OUTPUT);    // sets the digital pin 13 as output
+  pinMode(UV_PIN, OUTPUT);    // sets the digital pin 13 as output
   pinMode(TS_POWER_PIN, OUTPUT);
   pinMode(VCC_PIN, INPUT);
   Debugln(F("Ready..."));
 
+  sensor_t sensor;
+  dht.temperature().getSensor(&sensor);
+#ifdef DEBUG_MODE
+  Serial.println(F("------------------------------------"));
+  Serial.println(F("Temperature Sensor"));
+  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
+  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
+  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
+  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("°C"));
+  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("°C"));
+  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("°C"));
+  Serial.println(F("------------------------------------"));
+#endif
+  // Print humidity sensor details.
+#ifdef DEBUG_MODE
+  dht.humidity().getSensor(&sensor);
+  Serial.println(F("Humidity Sensor"));
+  Serial.print  (F("Sensor Type: ")); Serial.println(sensor.name);
+  Serial.print  (F("Driver Ver:  ")); Serial.println(sensor.version);
+  Serial.print  (F("Unique ID:   ")); Serial.println(sensor.sensor_id);
+  Serial.print  (F("Max Value:   ")); Serial.print(sensor.max_value); Serial.println(F("%"));
+  Serial.print  (F("Min Value:   ")); Serial.print(sensor.min_value); Serial.println(F("%"));
+  Serial.print  (F("Resolution:  ")); Serial.print(sensor.resolution); Serial.println(F("%"));
+  Serial.print  (F("Delay:       ")); Serial.print(sensor.min_delay); Serial.println(F("us"));
+  Serial.println(F("------------------------------------"));
+#endif
+  //  // Set delay between sensor readings based on sensor details.
+  delayMS = sensor.min_delay / 1000;
+
+
 } // setup
 
-#define MAX_TEMP_RETRIES 5
 //float SI7021_temperature = NAN;
 //float SI7021_humidity = NAN;
 void readTemp(void)
 {
+  dht.begin();  
   //      mySensor.read();
   //      Debug(mySensor.getHumidity(), 1);
   //      Debug("\t");
   //      Debugln(mySensor.getTemperature(), 1);
 
-  dht.begin();
+  // Print temperature sensor details.
+
+//#ifdef DEBUG_MODE
+//#else
+//  delayMS = 2000;
+//#endif
   payload.humidity = NAN;
   payload.temp = NAN;
-  float temp_hum_val[2] = {0};
+
   // Reading temperature or humidity takes about 250 milliseconds!
   // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-  LowPower.idle(SLEEP_2S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
-                SPI_OFF, USART0_OFF, TWI_OFF);
 
-
+  int success = 0;
   int retries = 0;
   for (retries; retries < MAX_TEMP_RETRIES; retries++)
   {
-    if (!dht.readTempAndHumidity(temp_hum_val)) {
-      payload.humidity = temp_hum_val[0];
-      payload.temp = temp_hum_val[1];
-      Debug("Humidity: ");
-      Debug(temp_hum_val[0]);
-      Debug(" %\t");
+
+    // Delay between measurements.
+    //delay(delayMS);
+    LowPower.idle(SLEEP_2S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
+                  SPI_OFF, USART0_OFF, TWI_OFF);
+    
+    // Get temperature event and print its value.
+    sensors_event_t event;
+    dht.temperature().getEvent(&event);
+
+    if (!isnan(event.temperature)) {
+      payload.temp = event.temperature;
       Debug("Temperature: ");
-      Debug(temp_hum_val[1]);
-      Debug(" Retries: ");
-      Debug(retries);
+      Debug(payload.temp);
       Debugln(" *C");
-      break;
+      success++;
     } else {
-      Debugln("Failed to get temprature and humidity value.");
-      delay(50);
+      Debugln("Failed to get temprature value.");
     }
+    dht.humidity().getEvent(&event);
+    if (!isnan(event.temperature)) {
+      payload.humidity = event.relative_humidity;
+      Debug("Humidity: ");
+      Debug(payload.humidity);
+      success++;
+    } else {
+      Debugln("Failed to get humidity value.");
+    }
+    Debug(" Retries: ");
+    Debug(retries);
+    if (success == 2) break;
+
   }
 
 }
 
-void readUVSensor(void) {
+//void readUV_VEML6075()
+//{
+//  if (! uv.begin()) {
+//    Debugln("Didn't find VEML6075");
+//  }
+//  else
+//  {
+//
+//    byte failureCode = 0;
+//    payload.uv_a = 0;
+//    payload.uv_b = 0;
+//    payload.uv_i = 0;
+//
+//    Debugln("=Reading VEML6075=");
+//
+//    // Set the integration constant
+//    uv.setIntegrationTime(VEML6075_100MS);
+//    // Set the high dynamic mode
+//    uv.setHighDynamic(true);
+//    // Set the mode
+//    uv.setForcedMode(false);
+//
+//    // Set the calibration coefficients
+//    uv.setCoefficients(2.22, 1.33,  // UVA_A and UVA_B coefficients
+//                       2.95, 1.74,  // UVB_C and UVB_D coefficients
+//                       0.001461, 0.002591); // UVA and UVB responses
+//
+//    payload.uv_a = uv.readUVA();
+//    payload.uv_b = uv.readUVB();
+//    payload.uv_i = uv.readUVI();
+//    Debug("Raw UVA reading:  "); Debugln(payload.uv_a);
+//    Debug("Raw UVB reading:  "); Debugln(payload.uv_b);
+//    Debug("UV Index reading: "); Debugln(payload.uv_i);  
+//
+//  }  
+//}
+
+//
+// Code for SI1145 Sensor
+//
+void readUVSI1145(void) {
   if (! uv.begin()) {
     Debugln("Didn't find Si1145");
   }
@@ -283,19 +365,8 @@ void readUVSensor(void) {
   }
 }
 
-
-void loop() {
-
-
-  digitalWrite(TS_PIN, HIGH); // sets the digital pin 13 on
-  //for (int il = 0; il < 20;il++)
-  //  delay(1000);
-
-  Debug(F("Reading voltage "));
-  //payload.voltage = readVcc();
-  payload.voltage = readVccINA219();
-  Debugln(payload.voltage);
-
+void readTLSSensor()
+{
   Debugln(F("TSL Sensor"));
   if (tsl.begin())
   {
@@ -319,8 +390,24 @@ void loop() {
   {
     Debugln(F("No TSL sensor found ... check your wiring?"));
   }
+}
 
-  readUVSensor();
+void loop() {
+
+
+  digitalWrite(AM_PIN, HIGH); // sets the digital pin on to power AM2301
+  digitalWrite(UV_PIN, HIGH); // sets the digital pin on to power UV & Light sensor
+  //for (int il = 0; il < 20;il++)
+  //  delay(1000);
+
+  Debug(F("Reading voltage "));
+  payload.voltage = readVcc();
+  //payload.voltage = readVccINA219();
+  Debugln(payload.voltage);
+
+  //readUV_VEML6075();
+  readTLSSensor();
+  readUVSI1145();
 
   Debugln(F("Reading temp"));
   readTemp();
@@ -381,8 +468,6 @@ void loop() {
     payload.payloadID = 0;
     radio.powerUp();
 
-    Debugln("Payload size: ");
-    Debugln(sizeof(payload));
     unsigned long start_timer = micros();                    // start the timer
     radio.writeBlocking(&payload, sizeof(payload), 2000);      // transmit & save the report
     bool report = radio.txStandBy(2000);
@@ -404,7 +489,9 @@ void loop() {
   delay(100);
 
   radio.powerDown();
-  digitalWrite(TS_PIN, LOW); // sets the digital pin 13 on
+  digitalWrite(AM_PIN, LOW); // sets the digital pin 13 on
+  digitalWrite(UV_PIN, LOW); // sets the digital pin on to power UV & Light sensor
+  
   //delay(100);
 
   Debugln("Starting sleep");
@@ -415,8 +502,9 @@ void loop() {
 #endif
 
   for (int il = 0; il < sleep_time; il++)
-    LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
-                  SPI_OFF, USART0_OFF, TWI_OFF);
+    LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
+//    LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
+//                  SPI_OFF, USART0_OFF, TWI_OFF);
 
   Debugln("Sleep completed");
   // to make this example readable in the serial monitor
