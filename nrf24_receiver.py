@@ -124,7 +124,7 @@ def slave(timeout=298):
             # publish data
             published = False
             ret1 = None;
-            ret2 = client.publish(node_roots[nodeID] + "/Arduino/Voltage","{:0.2f}".format(voltage))
+            ret2 = client.publish(node_roots[nodeID] + "/Arduino/Voltage","{:0.2f}".format(voltage),qos=2, retain=True)
             if (nodeID == 0 or nodeID == 2):
                 ret1 = client.publish(node_roots[nodeID] + "/DS18B20/Temperature", "{:0.2f}".format(temp))
             elif nodeID == 1:
