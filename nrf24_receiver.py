@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
 A simple example of sending data from 1 nRF24L01 transceiver to another.
 This example was written to be used on 2 devices acting as 'nodes'.
@@ -38,7 +39,8 @@ voltage = 0.0;
 # For this example, we will use different addresses
 # An address need to be a buffer protocol object (bytearray)
 node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
-node_roots =  ["hottub","weather","pool"]
+#node_roots =  ["hottub","weather","pool"]
+node_roots =  ["pool","weather","hottub"]
 
 def slave(timeout=298):
     """Listen for any payloads and print the transaction
@@ -64,13 +66,14 @@ def slave(timeout=298):
             bufEnd = 0;
             #unsigned long nodeID;
             bufStart = bufEnd;
-            bufEnd = bufStart + struct.calcsize('H');
-            nodeID = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
-            
-            #unsigned long payloadID;  
+            bufEnd = bufStart + struct.calcsize('b');
+            print("bufstart {} bufend {}".format(bufStart,bufEnd));
+            nodeID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0]);
+
+            #unsigned long payloadID;
             bufStart = bufEnd;
-            bufEnd = bufStart + struct.calcsize('H');
-            payloadID = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+            bufEnd = bufStart + struct.calcsize('b');
+            payloadID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0]);
 
             #float temp;
             bufStart = bufEnd;
@@ -91,24 +94,34 @@ def slave(timeout=298):
             humidity = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
 
             #unsigned long luxMeasure;
-            bufStart = bufEnd;
-            bufEnd = bufStart + struct.calcsize('H');
-            luxMeasure = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+            #bufStart = bufEnd;
+            #bufEnd = bufStart + struct.calcsize('H');
+            #luxMeasure = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
 
             #unsigned long amb_als;
-            bufStart = bufEnd;
-            bufEnd = bufStart + struct.calcsize('H');
-            amb_als = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+            #bufStart = bufEnd;
+            #bufEnd = bufStart + struct.calcsize('H');
+            #amb_als = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
 
             #unsigned long amb_ir;  
-            bufStart = bufEnd;
-            bufEnd = bufStart + struct.calcsize('H');
-            amb_ir = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+            #bufStart = bufEnd;
+            #bufEnd = bufStart + struct.calcsize('H');
+            #amb_ir = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
 
             #float uv_index;
             bufStart = bufEnd;
             bufEnd = bufStart + struct.calcsize('f');
             uv_index = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+
+            #float uv_a;
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('f');
+            uv_a = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+
+            #float uv_b;
+            bufStart = bufEnd;
+            bufEnd = bufStart + struct.calcsize('f');
+            uv_b = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
 
             #debug
             fullPath = os.path.expanduser("~/last_update_{}.txt".format(nodeID))
@@ -116,10 +129,10 @@ def slave(timeout=298):
                 last_update.write("Pipe {} NodeID {} PayloadID {}".format(pipe_number,nodeID,payloadID))
                 last_update.write(" Temp: {0:0.1f} °C".format(temp) + "\n")
                 last_update.write("Voltage (abs): {0:0.1f}".format(voltage) + "\n")
-                last_update.write("Humidity {} LuxMeasure {} Ambiant Light {} Ambiant IR {} UV {}".format(humidity,luxMeasure,amb_als,amb_ir,uv_index))
+                last_update.write("Humidity {} UV {} UVa {} UVb {}".format(humidity,uv_index,uv_a,uv_b))
                 last_update.write("\n")
 
-            print ("{} {} Data T:{:0.2f} V:{} H:{}% Lux:{} AL:{} IR:{} UV:{}".format(str(datetime.datetime.now()),pipe_number,temp,voltage,humidity,luxMeasure,amb_als,amb_ir,uv_index));
+            print ("{} {} Data T:{:0.2f} V:{} H:{}% UVa:{} UVb:{} UV:{}".format(str(datetime.datetime.now()),pipe_number,temp,voltage,humidity,uv_a,uv_b,uv_index));
 
             # publish data
             client.connect("openhab.local", 1883,60)
@@ -135,10 +148,12 @@ def slave(timeout=298):
             elif nodeID == 1:
                 TryPublish(node_roots[nodeID] + "/DHT/Temperature", temp,qos, retain)
                 TryPublish(node_roots[nodeID] + "/DHT/Humidity", humidity,qos, retain)
-                TryPublish(node_roots[nodeID] + "/TSL2561/Lux",luxMeasure,qos, retain)
-                TryPublish(node_roots[nodeID] + "/GY1145/AL",amb_als,qos, retain)
-                TryPublish(node_roots[nodeID] + "/GY1145/IR",amb_ir,qos, retain)
-                TryPublish(node_roots[nodeID] + "/GY1145/UV",(uv_index/100.0),qos, retain)
+                #TryPublish(node_roots[nodeID] + "/TSL2561/Lux",luxMeasure,qos, retain)
+                #TryPublish(node_roots[nodeID] + "/GY1145/AL",amb_als,qos, retain)
+                #TryPublish(node_roots[nodeID] + "/GY1145/IR",amb_ir,qos, retain)
+                TryPublish(node_roots[nodeID] + "/VEML6075/UVi",(uv_index/100.0),qos, retain)
+                TryPublish(node_roots[nodeID] + "/VEML6075/UVa",uv_a,qos, retain)
+                TryPublish(node_roots[nodeID] + "/VEML6075/UVb",uv_b,qos, retain)
                 #print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
             client.loop_stop()
             # print details about the received packet
@@ -148,7 +163,8 @@ def slave(timeout=298):
                 )
             )
             #start_timer = time.monotonic()  # reset the timeout timer
-
+        else:
+            time.sleep(0.1)
     print("{} - No data received - Leaving RX role...".format(str(datetime.datetime.now())));
     # recommended behavior is to keep in TX mode while idle
     radio.stopListening()  # put the radio in TX mode
