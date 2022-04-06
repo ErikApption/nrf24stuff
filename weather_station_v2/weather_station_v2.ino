@@ -4,15 +4,17 @@
 #include "printf.h"
 #include "RF24.h"
 #include <LowPower.h>
+#include <Vcc.h>
 #include "C:/Personal/nrf24stuff/temp_sender/payload.h"
 #include "C:/Personal/nrf24stuff/temp_sender/debug_stuff.h"
 #include <Wire.h>
 //#include <Adafruit_Sensor.h>
 #include "Adafruit_VEML6075.h"
 #include <avr/wdt.h>
-#include "tinySHT2x.h"
+#include "SHT2x.h"
 
-#define TEMP_VCC_PIN 9
+#define NRF_VCC_PIN 9
+#define TEMP_VCC_PIN 8
 #define UV_VCC_PIN 10
 #define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
@@ -23,11 +25,13 @@
 #define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
 #define SLEEP_CYCLES 10 //80 seconds otherwise
 
+#define I2C_TIMEOUT 500
+
 Adafruit_VEML6075 uv = Adafruit_VEML6075();
 
 uint32_t delayMS;
 
-tinySHT2x sht;
+SHT2x sht;
 
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(6, 7); // using pin 7 for the CE pin, and pin 8 for the CSN pin
@@ -49,30 +53,6 @@ uint8_t nodes[][6] = {"2Node", "3Node", "4Node", "5Node"};
 //float payload = 1.234;
 PayLoad payload;
 
-long readVcc() {
-  // Read 1.1V reference against AVcc
-  // set the reference to Vcc and the measurement to the internal 1.1V reference
-#if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-  ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-#elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
-  ADMUX = _BV(MUX5) | _BV(MUX0) ;
-#else
-  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-#endif
-
-  delay(2); // Wait for Vref to settle
-  ADCSRA |= _BV(ADSC); // Start conversion
-  while (bit_is_set(ADCSRA, ADSC)); // measuring
-
-  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH
-  uint8_t high = ADCH; // unlocks both
-
-  long result = (high << 8) | low;
-
-  result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
-  return result; // Vcc in millivolts
-}
-
 void setup() {
 
 #ifdef DEBUG_MODE
@@ -83,56 +63,74 @@ void setup() {
   Serial.println("Debug mode enabled");
 #endif
 
-  //Wire.begin();
-  //Wire.setWireTimeout(100, true);
-
+  pinMode(NRF_VCC_PIN, OUTPUT);
   pinMode(TEMP_VCC_PIN, OUTPUT);    // sets the digital pin 13 as output
   pinMode(UV_VCC_PIN, OUTPUT);    // sets the digital pin 13 as output
   pinMode(VCC_PIN, INPUT);
   Debugln("Ready...");
-
+  wdt_reset();
   delayMS = 100;
 
-
 } // setup
+
+double prevTemp = 0;
 
 //float SI7021_temperature = NAN;
 //float SI7021_humidity = NAN;
 void readTemp(void)
 {
-  sht.begin();
-
-  //#ifdef DEBUG_MODE
-  //#else
-  //  delayMS = 2000;
-  //#endif
+  Wire.begin();
+  Wire.setTimeout(I2C_TIMEOUT);
+  sht.begin(&Wire);
+  
   payload.humidity = NAN;
   payload.temp = NAN;
+  Debugln("Reading temperature");
 
-  // Reading temperature or humidity takes about 250 milliseconds!
-  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-
-  int success = 0;
-  int retries = 0;
-  for (retries; retries < MAX_TEMP_RETRIES; retries++)
+  if ( sht.isConnected()  )
   {
 
-    payload.temp = sht.getTemperature();
-    payload.humidity = sht.getHumidity();
-    Debug("Temp: ");
-    Debugln(payload.temp);
-    Debug("Hum: ");
-    Debugln(payload.humidity);
-    if (payload.temp != NAN)
-      break;
+    int success = 0;
+    int retries = 0;
+    for (retries; retries < MAX_TEMP_RETRIES; retries++)
+    {
 
-    Debug("Retries: ");
-    Debug(retries);
+      sht.read();
+      //    if (b)
+      //    {
+      payload.temp = sht.getTemperature();
+      payload.humidity = sht.getHumidity();
+      Debug("Temp: ");
+      Debugln(payload.temp);
+      Debug("Hum: ");
+      Debugln(payload.humidity);
+      int isValid = abs(payload.temp - prevTemp) <= 20;
+      prevTemp = payload.temp;
+      if (payload.temp != NAN && isValid)
+        break;
+      //    }
+      //    else
+      //    {
+      //      b = sht.read();
+      //      Debugln("Error reading SHT21");
+      //      payload.humidity = NAN;
+      //      payload.temp = NAN;
+      //    }
+      Debug("Retries: ");
+      Debug(retries);
+    }
+  }
+  else
+  {
+    Debugln("SHT is not connected");    
   }
 }
 
 void readUV_VEML6075()
 {
+  Wire.begin();
+  Wire.setTimeout(I2C_TIMEOUT);
+  
   if (! uv.begin()) {
     Debugln("Didn't find VEML6075");
   }
@@ -170,15 +168,16 @@ void readUV_VEML6075()
 
 
 void loop() {
-
   wdt_enable(WDTO_8S);
+
+  digitalWrite(NRF_VCC_PIN, HIGH); // sets the digital pin on to power AM2301
   digitalWrite(TEMP_VCC_PIN, HIGH); // sets the digital pin on to power AM2301
   digitalWrite(UV_VCC_PIN, HIGH); // sets the digital pin on to power UV & Light sensor
   //for (int il = 0; il < 20;il++)
   //  delay(1000);
 
   Debug("Reading voltage ");
-  payload.voltage = readVcc();
+  payload.voltage = Vcc::measure();
   //payload.voltage = readVccINA219();
   Debugln(payload.voltage);
 
@@ -273,6 +272,7 @@ void loop() {
   radio.powerDown();
   digitalWrite(TEMP_VCC_PIN, LOW); // sets the digital pin 13 on
   digitalWrite(UV_VCC_PIN, LOW); // sets the digital pin on to power UV & Light sensor
+  digitalWrite(NRF_VCC_PIN, LOW); // sets the digital pin on to power UV & Light sensor
 
   //delay(100);
   wdt_reset();
@@ -288,9 +288,14 @@ void loop() {
 #endif
 
   for (int il = 0; il < sleep_time; il++)
+#ifdef DEBUG_MODE
+    LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
+#else
     LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
   //    LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
   //                  SPI_OFF, USART0_OFF, TWI_OFF);
+#endif
+  
 
 
 

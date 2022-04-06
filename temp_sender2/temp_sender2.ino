@@ -26,8 +26,8 @@ DS18B20 sensor(&oneWire);
 RF24 radio(7, 8); // using pin 7 for the CE pin, and pin 8 for the CSN pin
 
 // Let these addresses be used for the pair
-uint8_t receiver_address[6] = "1Node";
-uint8_t nodes[][6] = {"2Node", "3Node", "4Node", "5Node"};
+const uint8_t receiver_address[6] = "1Node";
+const uint8_t nodes[][6] = {"2Node", "3Node", "4Node", "5Node"};
 // It is very helpful to think of an address as a path instead of as
 // an identifying device destination
 
