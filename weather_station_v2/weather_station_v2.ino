@@ -152,6 +152,7 @@ void readUV_VEML6075()
     uv.setForcedMode(false);
 
     // Set the calibration coefficients
+    // TODO: https://learn.sparkfun.com/tutorials/qwiic-uv-sensor-veml6075-hookup-guide/all read raw values instead
     uv.setCoefficients(2.22, 1.33,  // UVA_A and UVA_B coefficients
                        2.95, 1.74,  // UVB_C and UVB_D coefficients
                        0.001461, 0.002591); // UVA and UVB responses
