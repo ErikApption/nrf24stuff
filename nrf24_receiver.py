@@ -23,7 +23,7 @@ import os.path
 # Generic:
 radio = RF24(22, 0)
 
-IRQ_PIN = 27
+IRQ_PIN = 7
 
 ################## Linux (BBB,x86,etc) #########################
 # See http://nRF24.github.io/RF24/pages.html for more information on usage
@@ -123,67 +123,48 @@ def slave(timeout=298):
                 print("{} {} Data T:{:0.2f} V:{} H:{}%".format(
                     str(datetime.datetime.now()), pipe_number, temp, voltage, humidity))
 
-                # unsigned long luxMeasure;
-                # bufStart = bufEnd;
-                # bufEnd = bufStart + struct.calcsize('H');
-                # luxMeasure = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
-
-                # unsigned long amb_als;
-                # bufStart = bufEnd;
-                # bufEnd = bufStart + struct.calcsize('H');
-                # amb_als = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
-
-                # unsigned long amb_ir;
-                # bufStart = bufEnd;
-                # bufEnd = bufStart + struct.calcsize('H');
-                # amb_ir = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
-
-                # float uv_index;
-                # bufStart = bufEnd;
-                # bufEnd = bufStart + struct.calcsize('f');
-                # uv_index = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
-                # float uv_a;
-                # bufStart = bufEnd;
-                # bufEnd = bufStart + struct.calcsize('f');
-                # uv_a = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
-
-                # float uv_b;
-                # bufStart = bufEnd;
-                # bufEnd = bufStart + struct.calcsize('f');
-                # uv_b = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+                fullPath = os.path.expanduser(
+                    "~/last_update_{}.txt".format(nodeID))
+                with open(fullPath, 'w') as last_update:
+                    last_update.write("Pipe {} NodeID {} PayloadID {}".format(
+                        pipe_number, nodeID, payloadID))
+                    last_update.write(" Temp: {0:0.1f} °C".format(temp) + "\n")
+                    last_update.write(
+                        "Voltage (abs): {0:0.1f}".format(voltage) + "\n")
+                    last_update.write("Humidity {}".format(humidity))
+                    # last_update.write("Humidity {} UV {} UVa {} UVb {}".format(humidity,uv_index,uv_a,uv_b))
+                    last_update.write("\n")
 
             elif payloadID == 1:
-                # float temp;
+                # unsigned long amb_als;
                 bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('f')
-                amb_als = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+                bufEnd = bufStart + struct.calcsize('H')
+                amb_als = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
 
-                # float voltage;
+                # unsigned long amb_ir;
                 bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('f')
-                amb_ir = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+                bufEnd = bufStart + struct.calcsize('H')
+                amb_ir = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+
+                # float uv_index;
+                bufStart = bufEnd;
+                bufEnd = bufStart + struct.calcsize('f');
+                uv_index = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+                                 
                 TryPublish(node_roots[nodeID] +
                            "/GY1145/AL", amb_als, qos, retain)
                 TryPublish(node_roots[nodeID] +
                            "/GY1145/IR", amb_ir, qos, retain)
-                print("{} {} Data AmbALS:{:0.2f} AmbIR:{:0.2f}".format(
-                    str(datetime.datetime.now()), pipe_number, amb_als, amb_ir))
+                TryPublish(node_roots[nodeID] +
+                           "/GY1145/UV", uv_index, qos, retain)                           
+                print("{} {} Data AmbALS:{} AmbIR:{} UV:{:0.2f}".format(
+                    str(datetime.datetime.now()), pipe_number, amb_als, amb_ir,uv_index))
 
             else:
                 print("invalid payload id:{}".format(payloadID))
 
             # debug
-            fullPath = os.path.expanduser(
-                "~/last_update_{}.txt".format(nodeID))
-            with open(fullPath, 'w') as last_update:
-                last_update.write("Pipe {} NodeID {} PayloadID {}".format(
-                    pipe_number, nodeID, payloadID))
-                last_update.write(" Temp: {0:0.1f} °C".format(temp) + "\n")
-                last_update.write(
-                    "Voltage (abs): {0:0.1f}".format(voltage) + "\n")
-                last_update.write("Humidity {}".format(humidity))
-                # last_update.write("Humidity {} UV {} UVa {} UVb {}".format(humidity,uv_index,uv_a,uv_b))
-                last_update.write("\n")
+
 
                 # TryPublish(node_roots[nodeID] + "/TSL2561/Lux",luxMeasure,qos, retain)
                 # TryPublish(node_roots[nodeID] + "/VEML6075/UVi",uv_index,qos, retain)
