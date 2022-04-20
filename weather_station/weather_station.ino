@@ -16,6 +16,7 @@
 #include <DHT.h>
 #include <DHT_U.h>
 #include "Adafruit_VEML6075.h"
+#include <avr/wdt.h>
 
 #define AM_PIN 9
 #define UV_PIN 10
@@ -181,6 +182,8 @@ void setup() {
   Serial.println("Debug mode enabled");
 #endif
 
+  Wire.begin();
+  Wire.setWireTimeout(100, true);
   Debugln(F("Starting Weather Station"));
 
   Debugln(F("Configuring Transistor Pin"));
@@ -394,7 +397,7 @@ void readTLSSensor()
 
 void loop() {
 
-
+  wdt_enable(WDTO_8S);
   digitalWrite(AM_PIN, HIGH); // sets the digital pin on to power AM2301
   digitalWrite(UV_PIN, HIGH); // sets the digital pin on to power UV & Light sensor
   //for (int il = 0; il < 20;il++)
@@ -493,7 +496,11 @@ void loop() {
   digitalWrite(UV_PIN, LOW); // sets the digital pin on to power UV & Light sensor
   
   //delay(100);
+  wdt_reset();
 
+  // disable wdt while sleeping
+  wdt_disable();
+  
   Debugln("Starting sleep");
 #ifdef DEBUG_MODE
   int sleep_time = 1;
