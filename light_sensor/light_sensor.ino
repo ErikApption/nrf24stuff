@@ -104,6 +104,23 @@ void setup() {
   //Wire.setTimeout(I2C_TIMEOUT);
   lcd_debug(1,0,0,0);
 
+} // setup
+
+void lcd_debug(bool led1,bool led2,bool led3,bool led4)
+{
+#ifdef LED_DEBUG  
+  digitalWrite(LED1_PIN, led1? HIGH:LOW);
+  digitalWrite(LED2_PIN, led2? HIGH:LOW);
+  digitalWrite(LED3_PIN, led3? HIGH:LOW);
+  digitalWrite(LED4_PIN, led4? HIGH:LOW);
+#endif  
+}
+
+
+bool readTSLLux()
+{
+
+  tslPayload.lux = 0;
   /* You can also manually set the gain or enable auto-gain support */
   // tsl.setGain(TSL2561_GAIN_1X);      /* No gain ... use in bright light to avoid sensor saturation */
   // tsl.setGain(TSL2561_GAIN_16X);     /* 16x gain ... use in low light to boost sensitivity */
@@ -121,23 +138,8 @@ void setup() {
   {
     /* There was a problem detecting the TSL2561 ... check your connections */
     Debugln("Ooops, no TSL2561 detected ... Check your wiring or I2C ADDR!");    
-  }
-
-} // setup
-
-void lcd_debug(bool led1,bool led2,bool led3,bool led4)
-{
-#ifdef LED_DEBUG  
-  digitalWrite(LED1_PIN, led1? HIGH:LOW);
-  digitalWrite(LED2_PIN, led2? HIGH:LOW);
-  digitalWrite(LED3_PIN, led3? HIGH:LOW);
-  digitalWrite(LED4_PIN, led4? HIGH:LOW);
-#endif  
-}
-
-
-bool readTSLLux()
-{
+    return false;
+  }  
 
   unsigned long start_timer = micros();
   /* Get a new sensor event */ 
@@ -177,7 +179,7 @@ void loop() {
   Debug("Reading voltage ");
   tslPayload.voltage = Vcc::measure();
   //payload.voltage = readA0_Voltage_mV();
-  Debugln(payload.voltage);
+  Debugln(tslPayload.voltage);
 
   lcd_debug(0,0,0,1);
   Debug("Reading Lux ");  
@@ -244,10 +246,7 @@ void loop() {
     //radio.setPayloadSize(sizeof(payload)); // float datatype occupies 4 bytes
     unsigned long start_timer = micros();                    // start the timer
 
-    if (luxAvailable)
-    {
-      radio.writeFast(&tslPayload, sizeof(tslPayload));
-    }
+    radio.writeFast(&tslPayload, sizeof(tslPayload));
     bool fifoSuccess = radio.txStandBy(2000);// Using extended timeouts, returns 1 if success. Retries failed payloads for 1 seconds before returning 0.
     unsigned long end_timer = micros();                      // end the timer
 
