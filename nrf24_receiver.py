@@ -8,6 +8,7 @@ import argparse
 import time
 import struct
 import datetime
+import numpy as np
 from RF24 import RF24, RF24_PA_LOW
 import paho.mqtt.client as paho
 import os.path
@@ -43,7 +44,7 @@ voltage = 0.0
 # An address need to be a buffer protocol object (bytearray)
 node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
 # node_roots =  ["hottub","weather","pool"]
-node_roots = ["pool", "weather", "hottub"]
+node_roots = ["pool", "weather", "hottub","garden"]
 
 
 def slave(timeout=298):
@@ -82,7 +83,6 @@ def slave(timeout=298):
             # unsigned long nodeID;
             bufStart = bufEnd
             bufEnd = bufStart + struct.calcsize('b')
-            print("bufstart {} bufend {}".format(bufStart, bufEnd))
             nodeID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
 
             # unsigned long payloadID;
@@ -136,20 +136,29 @@ def slave(timeout=298):
                     last_update.write("\n")
 
             elif payloadID == 1:
+                # debug buffer
+                vhex = np.vectorize(hex)
+                # print("buffer={}".format(vhex(buffer)))
                 # unsigned long amb_als;
                 bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('H')
-                amb_als = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+                bufEnd = bufStart + struct.calcsize('L')
+                amb_als = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
 
                 # unsigned long amb_ir;
                 bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('H')
-                amb_ir = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+                bufEnd = bufStart + struct.calcsize('L')
+                amb_ir = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
+                #print("amb_ir={}".format(vhex(buffer[bufStart:bufEnd])))
 
                 # float uv_index;
                 bufStart = bufEnd;
                 bufEnd = bufStart + struct.calcsize('f');
                 uv_index = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+
+                # float uv_index;
+                bufStart = bufEnd;
+                bufEnd = bufStart + struct.calcsize('L');
+                readout_ms = struct.unpack("<L", buffer[bufStart:bufEnd])[0]                
                                  
                 TryPublish(node_roots[nodeID] +
                            "/GY1145/AL", amb_als, qos, retain)
@@ -157,8 +166,31 @@ def slave(timeout=298):
                            "/GY1145/IR", amb_ir, qos, retain)
                 TryPublish(node_roots[nodeID] +
                            "/GY1145/UV", uv_index, qos, retain)                           
-                print("{} {} Data AmbALS:{} AmbIR:{} UV:{:0.2f}".format(
-                    str(datetime.datetime.now()), pipe_number, amb_als, amb_ir,uv_index))
+                print("{} {} Data AmbALS:{} AmbIR:{} UV:{:0.2f} - {} ms".format(
+                    str(datetime.datetime.now()), pipe_number, amb_als, amb_ir,uv_index,readout_ms))
+
+            elif payloadID == 3:
+                # unsigned int lux; should be 4 bytes but is 2
+                bufStart = bufEnd
+                bufEnd = bufStart + struct.calcsize('H')
+                luxValue = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+                                 
+                TryPublish(node_roots[nodeID] +
+                           "/TSL2261/LUX", luxValue, qos, retain)
+
+                # float voltage;
+                bufStart = bufEnd
+                bufEnd = bufStart + struct.calcsize('f')
+                voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+                # convert mv to V
+                if voltage > 0:
+                    voltage = voltage * 1.0 / 1000.0
+
+                TryPublish(node_roots[nodeID] +
+                           "/Arduino/Voltage", voltage, qos, retain)
+
+                print("{} {} Data Lux:{} V:{}".format(
+                    str(datetime.datetime.now()), pipe_number, luxValue,voltage))
 
             else:
                 print("invalid payload id:{}".format(payloadID))
@@ -223,7 +255,7 @@ if __name__ == "__main__":
 
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
-    radio.setPALevel(RF24_PA_LOW)  # RF24_PA_MAX is default
+    #radio.setPALevel(RF24_PA_LOW)  # RF24_PA_MAX is default //RF24_PA_LOW
     radio.setChannel(5)
 
     radio.setAutoAck(True)
