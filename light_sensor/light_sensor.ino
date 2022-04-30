@@ -10,10 +10,9 @@
 //#include <LowPower.h>
 #include <Vcc.h>
 #include <Wire.h>
-//#include <Adafruit_Sensor.h>
-#include "Adafruit_VEML6075.h"
+#include <Adafruit_Sensor.h>
+#include <Adafruit_TSL2561_U.h>
 #include <avr/wdt.h>
-#include "SHT2x.h"
 #include <debug_stuff.h>
 #include <payload.h>
 
@@ -35,26 +34,20 @@
 #define LED4_PIN 5
 
 #define SENSOR_VCC_PIN 9
-#define TEMP_VCC_PIN 8
-#define UV_VCC_PIN 10
 #define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
 #define MAX_TEMP_RETRIES 2
-#define NODE_ID 1
+#define NODE_ID 3
 #define DHT_PIN 5
-#include <SI1145_WE.h>
 
 #define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
 #define SLEEP_CYCLES 10 //80 seconds otherwise
 
 #define I2C_TIMEOUT 500
 
-//Adafruit_VEML6075 uv = Adafruit_VEML6075();
-SI1145_WE mySI1145 = SI1145_WE(&Wire);
 
 uint32_t delayMS;
 
-SHT2x sht;
 
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(6, 7); // using pin 6 for the CE pin, and pin 7 for the CSN pin - weather station setup
@@ -69,14 +62,9 @@ uint8_t nodes[][6] = {"2Node", "3Node", "4Node", "5Node"};
 // to use different addresses on a pair of radios, we need a variable to
 // uniquely identify which address this radio will use to transmit
 
-// Used to control whether this node is sending or receiving
+Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
 
-// For this example, we'll be using a payload containing
-// a single float number that will be incremented
-// on every successful transmission
-//float payload = 1.234;
-BasePayLoad payload;
-SI1145PayLoad si1145data;
+TSLPayLoad tslPayload;
 
 void setup() {
 
@@ -104,8 +92,6 @@ void setup() {
   lcd_debug(1,1,1,0);
 
   pinMode(SENSOR_VCC_PIN, OUTPUT);
-  pinMode(TEMP_VCC_PIN, OUTPUT);    // sets the digital pin 13 as output
-  pinMode(UV_VCC_PIN, OUTPUT);    // sets the digital pin 13 as output
   pinMode(VCC_PIN, INPUT);
   Debugln("Ready...");
   lcd_debug(1,1,0,0);
@@ -130,131 +116,53 @@ void lcd_debug(bool led1,bool led2,bool led3,bool led4)
 #endif  
 }
 
-double prevTemp = 0;
 
-//float SI7021_temperature = NAN;
-//float SI7021_humidity = NAN;
-void readTemp(void)
+bool readTSLLux()
 {
-  unsigned long start_timer = micros();  
-  sht.begin(&Wire);
+
+  tslPayload.lux = 0;
+  /* You can also manually set the gain or enable auto-gain support */
+  // tsl.setGain(TSL2561_GAIN_1X);      /* No gain ... use in bright light to avoid sensor saturation */
+  // tsl.setGain(TSL2561_GAIN_16X);     /* 16x gain ... use in low light to boost sensitivity */
+  tsl.enableAutoRange(true);            /* Auto-gain ... switches automatically between 1x and 16x */
   
-  payload.humidity = NAN;
-  payload.temp = NAN;
-  Debugln("Reading temperature");
+  /* Changing the integration time gives you better sensor resolution (402ms = 16-bit data) */
+  //tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);      /* fast but low resolution */
+  tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_101MS);  /* medium resolution and speed   */
+  // tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_402MS);  /* 16-bit data but slowest conversions */  
 
-  if ( sht.isConnected()  )
+  /* Initialise the sensor */
+  //use tsl.begin() to default to Wire, 
+  //tsl.begin(&Wire2) directs api to use Wire2, etc.
+  if(!tsl.begin(&Wire))
   {
-
-    int success = 0;
-    int retries = 0;
-    for (retries; retries < MAX_TEMP_RETRIES; retries++)
-    {
-
-      sht.read();
-      payload.temp = sht.getTemperature();
-      payload.humidity = sht.getHumidity();
-      Debug("Temp: ");
-      Debugln(payload.temp);
-      Debug("Hum: ");
-      Debugln(payload.humidity);
-      int isValid = abs(payload.temp - prevTemp) <= 20;
-      prevTemp = payload.temp;
-      if (payload.temp != NAN && isValid)
-        break;
-
-      Debug("Retries: ");
-      Debug(retries);
-    }
-  }
-  else
-  {
-    Debugln("SHT is not connected");    
-  }
-  unsigned long end_timer = micros();  
-  payload.readoutms = end_timer - start_timer;
-  Debug(" readoutms:");Debug(payload.readoutms);Debug(" ");
-}
-
-#define VOLTAGE_MEASUREMENTS 5
-
-float readA0_Voltage_mV()
-{
-  int sensorValue = 0;
-  for (int i =0; i <VOLTAGE_MEASUREMENTS;i++){
-    sensorValue += analogRead(A0);
-    delay(20);
-  } 
-  return sensorValue * (5.0 * 1000.0 / 1023.0) / VOLTAGE_MEASUREMENTS;  
-}
-
-#define SI1145_MEASUREMENTS 5
-bool readSI1145()
-{
-  unsigned long start_timer = micros();
-//si1145data  
-  mySI1145.init();
-  //mySI1145.enableHighSignalVisRange();
-  //mySI1145.enableHighSignalIrRange();
-  Debugln("SI1145 - initialized");
-  /* choices: PS_TYPE, ALS_TYPE, PSALS_TYPE, ALSUV_TYPE, PSALSUV_TYPE || FORCE, AUTO, PAUSE */
-  mySI1145.enableMeasurements(ALS_TYPE, FORCE);
-  Debugln("SI1145 - initialized2");
-
-   /* choose gain value: 0, 1, 2, 3, 4, 5, 6, 7 */ 
-  mySI1145.setAlsVisAdcGain(0);
-  Debugln("SI1145 - initialized3");
-
-  //mySI1145.enableHighResolutionVis();
-  Debugln("SI1145 - forced ALS");
-
-  byte failureCode = 0;
-  unsigned long amb_als = 0;
-  unsigned long amb_ir = 0;
-  float uv = 0;
-
-  si1145data.amb_als = 0;
-  si1145data.amb_ir = 0;  
-  si1145data.uv = NAN;  
-   
-  for(int i=0; i<SI1145_MEASUREMENTS; i++){
-    Debug("readout ");
-    Debugln(i);
-    mySI1145.startSingleMeasurement();
-    failureCode = mySI1145.getFailureMode();  // reads the response register
-    if((failureCode&128))
-      break;
-    amb_als += mySI1145.getAlsVisData();
-    amb_ir += mySI1145.getAlsIrData();
-    uv += mySI1145.getUvIndex();
-  }
-  if((failureCode&128))
-  {
-    Debugln("error reading SI1145");
-    unsigned long end_timer = micros();
-    si1145data.readoutms = end_timer-start_timer;
+    /* There was a problem detecting the TSL2561 ... check your connections */
+    Debugln("Ooops, no TSL2561 detected ... Check your wiring or I2C ADDR!");    
     return false;
+  }  
+
+  unsigned long start_timer = micros();
+  /* Get a new sensor event */ 
+  sensors_event_t event;
+  tsl.getEvent(&event);
+  bool success =false;
+  /* Display the results (light is measured in lux) */
+  if (event.light)
+  {
+    Debug(event.light); Debugln(" lux");
+    tslPayload.lux = event.light;
+    success = true;
   }
   else
   {
-    amb_als /= SI1145_MEASUREMENTS;
-    amb_ir /= SI1145_MEASUREMENTS;
-    uv /= SI1145_MEASUREMENTS;
-    Debug("Ambient Light: ");
-    Debugln(amb_als);
-    Debug("Infrared Light: ");
-    Debugln(amb_ir);  
-    Debug("UV Index: ");
-    Debugln(uv);      
-    si1145data.amb_als = amb_als;
-    si1145data.amb_ir = amb_ir;
-    si1145data.uv = uv;
-    unsigned long end_timer = micros();
-    si1145data.readoutms = end_timer-start_timer;
-    Debug("Readout ms: ");
-    Debugln(si1145data.readoutms);   
-    return true;
+    /* If event.light = 0 lux the sensor is probably saturated
+       and no reliable data could be generated! */
+    Debugln("Sensor overload");
+    tslPayload.lux = 0;
   }
+  unsigned long end_timer = micros();
+  tslPayload.readoutms = end_timer-start_timer;
+  return success;
 }
 
 void loop() {
@@ -268,35 +176,14 @@ void loop() {
   wdt_enable(WDTO_8S);
 #endif
 
-
-  digitalWrite(SENSOR_VCC_PIN, HIGH); // sets the digital pin on to power AM2301
-
   Debug("Reading voltage ");
-  payload.voltage = Vcc::measure();
+  tslPayload.voltage = Vcc::measure();
   //payload.voltage = readA0_Voltage_mV();
-  Debugln(payload.voltage);
+  Debugln(tslPayload.voltage);
 
-  digitalWrite(UV_VCC_PIN, HIGH); // sets the digital pin on to power UV & Light sensor
   lcd_debug(0,0,0,1);
-  Debug("Reading SI1145 ");  
-  bool si1145Available = readSI1145();
-  digitalWrite(UV_VCC_PIN, LOW); // sets the digital pin on to power UV & Light sensor
-
-  digitalWrite(TEMP_VCC_PIN, HIGH); // sets the digital pin on to power AM2301
-  Debugln("Reading temp");
-  lcd_debug(0,0,1,0);
-  readTemp();
-  digitalWrite(TEMP_VCC_PIN, LOW); // sets the digital pin 13 on
-
-  int p = sizeof(payload);
-  int p2= sizeof(si1145data);
-  //p = max(p,p2);
-#ifdef DEBUG_MODE
-  Debugln("");
-  Debug("Size of payload is ");
-  Debugln(p);
-  if (p > 32) Debugln("!!Warning!! invalid payload size");
-#endif
+  Debug("Reading Lux ");  
+  bool luxAvailable = readTSLLux();
 
   lcd_debug(0,0,1,1);
 
@@ -350,39 +237,23 @@ void loop() {
     // This device is a TX node
     //    payload.temp = sensor.getTempC(); TOFIX
     //    payload.voltage = analogRead(A1);
-    payload.nodeID = NODE_ID;
-    si1145data.nodeID = NODE_ID;
 
-    Debugln("Payload size: ");
-    Debugln(sizeof(payload));
-    Debugln("SI1145 size: ");
-    Debugln(sizeof(si1145data));    
+    tslPayload.nodeID = NODE_ID;
+    tslPayload.payloadID = 3;
 
-    payload.payloadID = 0;
-    si1145data.payloadID = 1;
     radio.powerUp(); //This will take up to 5ms for maximum compatibility
     delay(10);
     //radio.setPayloadSize(sizeof(payload)); // float datatype occupies 4 bytes
     unsigned long start_timer = micros();                    // start the timer
-    //radio.writeBlocking(&payload, sizeof(payload), 2000);      // transmit & save the report
-    radio.writeFast(&payload, sizeof(payload));
 
-    //radio.txStandBy();
-    //radio.txStandBy(2000);
-    //radio.setPayloadSize(sizeof(si1145data)); // float datatype occupies 4 bytes
-    //radio.writeBlocking(&si1145data, sizeof(si1145data), 2000);
-    if (si1145Available)
-    {
-      radio.writeFast(&si1145data, sizeof(si1145data));
-    }
+    radio.writeFast(&tslPayload, sizeof(tslPayload));
     bool fifoSuccess = radio.txStandBy(2000);// Using extended timeouts, returns 1 if success. Retries failed payloads for 1 seconds before returning 0.
     unsigned long end_timer = micros();                      // end the timer
 
     if (fifoSuccess) {
       Debug("Time to transmit = ");
       Debug(end_timer - start_timer);                 // print the timer result
-      Debug(" us. Sent: ");
-      Debugln(payload.temp);                               // print payload sent
+      Debug(" us. Sent ");
       success = 1;
     } else {
       success = 0;
@@ -395,9 +266,6 @@ void loop() {
   delay(100);
   lcd_debug(0,1,0,1);
   radio.powerDown();
-  digitalWrite(TEMP_VCC_PIN, LOW); // sets the digital pin 13 on
-  digitalWrite(UV_VCC_PIN, LOW); // sets the digital pin on to power UV & Light sensor
-  digitalWrite(SENSOR_VCC_PIN, LOW); // sets the digital pin on to power UV & Light sensor
 
   //delay(100);
   wdt_reset();

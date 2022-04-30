@@ -12,7 +12,7 @@
 #define ONE_WIRE_BUS 6
 #define TS_PIN 9
 #define MAX_RADIO_RETRIES 10
-#define NODE_ID 2
+#define NODE_ID 2 //hot tub
 
 #define TX_TIMEOUT 2000
 
@@ -40,7 +40,7 @@ const uint8_t nodes[][6] = {"2Node", "3Node", "4Node", "5Node"};
 // a single float number that will be incremented
 // on every successful transmission
 //float payload = 1.234;
-PayLoad payload;
+BasePayLoad payload;
 
 void setup() {
 #ifdef DEBUG_MODE
@@ -116,7 +116,8 @@ void loop() {
 
     // save on transmission time by setting the radio to only transmit the
     // number of bytes we need to transmit a float
-    radio.setPayloadSize(sizeof(payload)); // float datatype occupies 4 bytes
+    //radio.setPayloadSize(sizeof(payload)); // float datatype occupies 4 bytes
+    radio.enableDynamicPayloads();
 
     // set the TX address of the RX node into the TX pipe
     radio.openWritingPipe(nodes[NODE_ID]);     // always uses pipe 0

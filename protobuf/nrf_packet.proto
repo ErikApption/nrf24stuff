@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+message PayLoad {
+    required byte nodeID = 1;
+    required byte payloadID = 2;  
+    required float temp = 3;
+    required float voltage = 4;
+    required float humidity = 5;
+    //unsigned int luxMeasure;
+    //unsigned int amb_als;
+    //unsigned int amb_ir;  
+    required float uv_index = 6;
+    required float uv_a = 7;
+    required float uv_b = 8;  
+  }
