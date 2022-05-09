@@ -8,12 +8,13 @@ import argparse
 import time
 import struct
 import datetime
+import numpy as np
 from RF24 import RF24, RF24_PA_LOW
 import paho.mqtt.client as paho
 import os.path
 
 ########### USER CONFIGURATION ###########
-# See https://github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
+# See https:#github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
 # Radio CE Pin, CSN Pin, SPI Speed
 # CE Pin uses GPIO number with BCM and SPIDEV drivers, other platforms use
 # their own pin numbering
@@ -26,9 +27,9 @@ radio = RF24(22, 0)
 IRQ_PIN = 7
 
 ################## Linux (BBB,x86,etc) #########################
-# See http://nRF24.github.io/RF24/pages.html for more information on usage
-# See http://iotdk.intel.com/docs/master/mraa/ for more information on MRAA
-# See https://www.kernel.org/doc/Documentation/spi/spidev for more
+# See http:#nRF24.github.io/RF24/pages.html for more information on usage
+# See http:#iotdk.intel.com/docs/master/mraa/ for more information on MRAA
+# See https:#www.kernel.org/doc/Documentation/spi/spidev for more
 # information on SPIDEV
 
 # using the python keyword global is bad practice. Instead we'll use a 1 item
@@ -43,7 +44,7 @@ voltage = 0.0
 # An address need to be a buffer protocol object (bytearray)
 node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
 # node_roots =  ["hottub","weather","pool"]
-node_roots = ["pool", "weather", "hottub"]
+node_roots = ["pool", "weather", "hottub","garden"]
 
 
 def slave(timeout=298):
@@ -82,7 +83,6 @@ def slave(timeout=298):
             # unsigned long nodeID;
             bufStart = bufEnd
             bufEnd = bufStart + struct.calcsize('b')
-            print("bufstart {} bufend {}".format(bufStart, bufEnd))
             nodeID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
 
             # unsigned long payloadID;
@@ -136,29 +136,66 @@ def slave(timeout=298):
                     last_update.write("\n")
 
             elif payloadID == 1:
+                # debug buffer
+                vhex = np.vectorize(hex)
+                # print("buffer={}".format(vhex(buffer)))
                 # unsigned long amb_als;
                 bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('H')
-                amb_als = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+                bufEnd = bufStart + struct.calcsize('L')
+                amb_als = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
 
                 # unsigned long amb_ir;
                 bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('H')
-                amb_ir = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+                bufEnd = bufStart + struct.calcsize('L')
+                amb_ir = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
+                #print("amb_ir={}".format(vhex(buffer[bufStart:bufEnd])))
 
                 # float uv_index;
                 bufStart = bufEnd;
                 bufEnd = bufStart + struct.calcsize('f');
-                uv_index = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+                uv_index = 1.0 * struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+                # https:#github.com/adafruit/Adafruit_SI1145_Library/blob/master/examples/si1145test/si1145test.ino
+                uv_index = uv_index / 100.0; # the index is multiplied by 100 
+
+                # float uv_index;
+                bufStart = bufEnd;
+                bufEnd = bufStart + struct.calcsize('L');
+                readout_ms = struct.unpack("<L", buffer[bufStart:bufEnd])[0]                
                                  
+                lux = calcLux(amb_als,amb_ir)
                 TryPublish(node_roots[nodeID] +
                            "/GY1145/AL", amb_als, qos, retain)
                 TryPublish(node_roots[nodeID] +
                            "/GY1145/IR", amb_ir, qos, retain)
                 TryPublish(node_roots[nodeID] +
-                           "/GY1145/UV", uv_index, qos, retain)                           
-                print("{} {} Data AmbALS:{} AmbIR:{} UV:{:0.2f}".format(
-                    str(datetime.datetime.now()), pipe_number, amb_als, amb_ir,uv_index))
+                           "/GY1145/UV", uv_index, qos, retain)      
+                TryPublish(node_roots[nodeID] +
+                           "/GY1145/Luminosity", lux, qos, retain)                                                
+                print("{} {} Data AmbALS:{} AmbIR:{} UV:{:0.2f} Lux:{} - {} ms".format(
+                    str(datetime.datetime.now()), pipe_number, amb_als, amb_ir,uv_index,lux,readout_ms))
+
+            elif payloadID == 3:
+                # unsigned int lux; should be 4 bytes but is 2
+                bufStart = bufEnd
+                bufEnd = bufStart + struct.calcsize('H')
+                luxValue = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+                                 
+                TryPublish(node_roots[nodeID] +
+                           "/TSL2261/LUX", luxValue, qos, retain)
+
+                # float voltage;
+                bufStart = bufEnd
+                bufEnd = bufStart + struct.calcsize('f')
+                voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+                # convert mv to V
+                if voltage > 0:
+                    voltage = voltage * 1.0 / 1000.0
+
+                TryPublish(node_roots[nodeID] +
+                           "/Arduino/Voltage", voltage, qos, retain)
+
+                print("{} {} Data Lux:{} V:{}".format(
+                    str(datetime.datetime.now()), pipe_number, luxValue,voltage))
 
             else:
                 print("invalid payload id:{}".format(payloadID))
@@ -185,6 +222,25 @@ def slave(timeout=298):
     print("{} - No data received - Leaving RX role...".format(str(datetime.datetime.now())))
     # recommended behavior is to keep in TX mode while idle
     radio.stopListening()  # put the radio in TX mode
+
+def calcLux(vis, ir):
+  vis_dark = 256 # empirical value
+  ir_dark = 250 # empirical value
+  gainFactor = 1.0
+  visCoeff = 5.41 # application notes AN523
+  irCoeff = 0.08 # application notes AN523
+  visCountPerLux = 0.319 # for incandescent bulb (datasheet)
+  irCountPerLux = 8.46 # for incandescent bulb (datasheet)
+  corrFactor = 0.18 # my empirical correction factor
+  
+  # According to application notes AN523: 
+  lux = ((vis - vis_dark) * visCoeff - (ir - ir_dark) * irCoeff) * gainFactor
+
+  # the equation above does not consider the counts/Lux depending on light source type
+  # I suggest the following equation
+  # float lux = (((vis - vis_dark) / visCountPerLux) * visCoeff - ((ir - ir_dark) / irCountPerLux) * irCoeff) * gainFactor * corrFactor
+  
+  return lux
 
 
 def TryPublish(topic, payload=None, qos=0, retain=False):
@@ -223,7 +279,7 @@ if __name__ == "__main__":
 
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
-    radio.setPALevel(RF24_PA_LOW)  # RF24_PA_MAX is default
+    #radio.setPALevel(RF24_PA_LOW)  # RF24_PA_MAX is default #RF24_PA_LOW
     radio.setChannel(5)
 
     radio.setAutoAck(True)
