@@ -11,11 +11,11 @@
 #include <Vcc.h>
 #include <Wire.h>
 //#include <Adafruit_Sensor.h>
-#include "Adafruit_VEML6075.h"
 #include <avr/wdt.h>
 #include "SHT2x.h"
 #include <debug_stuff.h>
 #include <payload.h>
+#include "Adafruit_SI1145.h"
 
 #ifdef __LGT8F__
 #include <PMU.h>
@@ -34,13 +34,13 @@
 #define LED3_PIN 4
 #define LED4_PIN 5
 
-#define SENSOR_VCC_PIN 9
-#define TEMP_VCC_PIN 8
-#define UV_VCC_PIN 10
+#define SENSOR_VCC_ON_PIN 9
+//#define TEMP_VCC_PIN 8
+//#define UV_VCC_PIN 10
 #define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
 #define MAX_TEMP_RETRIES 2
-#define NODE_ID 1
+#define NODE_ID 1 //weather
 #define DHT_PIN 5
 #include <SI1145_WE.h>
 
@@ -51,7 +51,7 @@
 
 //Adafruit_VEML6075 uv = Adafruit_VEML6075();
 SI1145_WE mySI1145 = SI1145_WE(&Wire);
-
+Adafruit_SI1145 uvs = Adafruit_SI1145();
 uint32_t delayMS;
 
 SHT2x sht;
@@ -103,9 +103,7 @@ void setup() {
 
   lcd_debug(1,1,1,0);
 
-  pinMode(SENSOR_VCC_PIN, OUTPUT);
-  pinMode(TEMP_VCC_PIN, OUTPUT);    // sets the digital pin 13 as output
-  pinMode(UV_VCC_PIN, OUTPUT);    // sets the digital pin 13 as output
+  pinMode(SENSOR_VCC_ON_PIN, OUTPUT);
   pinMode(VCC_PIN, INPUT);
   Debugln("Ready...");
   lcd_debug(1,1,0,0);
@@ -189,6 +187,59 @@ float readA0_Voltage_mV()
 }
 
 #define SI1145_MEASUREMENTS 5
+
+bool readSI1145_2()
+{
+  unsigned long start_timer = micros();
+
+  Debugln("SI1145 - initialized");
+  
+  if (!uvs.begin(&Wire))
+  {
+    return false;
+  }
+
+  Debugln("SI1145 - initialized3");
+
+  byte failureCode = 0;
+  unsigned long amb_als = 0;
+  unsigned long amb_ir = 0;
+  float uv = 0;
+
+  si1145data.amb_als = 0;
+  si1145data.amb_ir = 0;  
+  si1145data.uv = NAN;  
+   
+  for(int i=0; i<SI1145_MEASUREMENTS; i++){
+    Debug("readout ");
+    Debugln(i);    
+    amb_als += (long)(uvs.readVisible());
+    amb_ir += (long)(uvs.readIR());
+    uv += (float)(uvs.readUV());
+  }
+  
+  amb_als /= SI1145_MEASUREMENTS;
+  amb_ir /= SI1145_MEASUREMENTS;
+  uv /= SI1145_MEASUREMENTS;
+  
+  si1145data.amb_als = amb_als;
+  si1145data.amb_ir = amb_ir;
+  si1145data.uv = uv;
+
+  Debug("Ambient Light: ");
+  Debugln(si1145data.amb_als);
+  Debug("Infrared Light: ");
+  Debugln(si1145data.amb_ir);  
+  Debug("UV Index: ");
+  Debugln(si1145data.uv);   
+
+  unsigned long end_timer = micros();
+  si1145data.readoutms = end_timer-start_timer;
+  Debug("Readout ms: ");
+  Debugln(si1145data.readoutms);   
+  return true;  
+}
+
 bool readSI1145()
 {
   unsigned long start_timer = micros();
@@ -197,8 +248,11 @@ bool readSI1145()
   //mySI1145.enableHighSignalVisRange();
   //mySI1145.enableHighSignalIrRange();
   Debugln("SI1145 - initialized");
+  mySI1145.enableHighSignalVisRange(); // Gain divided by 14.5
+  mySI1145.enableHighSignalIrRange(); // Gain divided by 14.5
   /* choices: PS_TYPE, ALS_TYPE, PSALS_TYPE, ALSUV_TYPE, PSALSUV_TYPE || FORCE, AUTO, PAUSE */
   mySI1145.enableMeasurements(ALS_TYPE, FORCE);
+  mySI1145.enableMeasurements(PSALSUV_TYPE, AUTO);
   Debugln("SI1145 - initialized2");
 
    /* choose gain value: 0, 1, 2, 3, 4, 5, 6, 7 */ 
@@ -240,15 +294,18 @@ bool readSI1145()
     amb_als /= SI1145_MEASUREMENTS;
     amb_ir /= SI1145_MEASUREMENTS;
     uv /= SI1145_MEASUREMENTS;
-    Debug("Ambient Light: ");
-    Debugln(amb_als);
-    Debug("Infrared Light: ");
-    Debugln(amb_ir);  
-    Debug("UV Index: ");
-    Debugln(uv);      
+   
     si1145data.amb_als = amb_als;
     si1145data.amb_ir = amb_ir;
     si1145data.uv = uv;
+
+    Debug("Ambient Light: ");
+    Debugln(si1145data.amb_als);
+    Debug("Infrared Light: ");
+    Debugln(si1145data.amb_ir);  
+    Debug("UV Index: ");
+    Debugln(si1145data.uv);   
+
     unsigned long end_timer = micros();
     si1145data.readoutms = end_timer-start_timer;
     Debug("Readout ms: ");
@@ -269,24 +326,27 @@ void loop() {
 #endif
 
 
-  digitalWrite(SENSOR_VCC_PIN, HIGH); // sets the digital pin on to power AM2301
+  digitalWrite(SENSOR_VCC_ON_PIN, HIGH); 
 
   Debug("Reading voltage ");
   payload.voltage = Vcc::measure();
   //payload.voltage = readA0_Voltage_mV();
   Debugln(payload.voltage);
 
-  digitalWrite(UV_VCC_PIN, HIGH); // sets the digital pin on to power UV & Light sensor
   lcd_debug(0,0,0,1);
-  Debug("Reading SI1145 ");  
-  bool si1145Available = readSI1145();
-  digitalWrite(UV_VCC_PIN, LOW); // sets the digital pin on to power UV & Light sensor
+  bool si1145Available = false;
+  for (int si=0;si < 10;si++)
+  {
+    Debug("Reading SI1145 test");  
+    Debug(si);
+    si1145Available = readSI1145_2();
+    if (si1145Available) break;
+    delay(100);
+  }
 
-  digitalWrite(TEMP_VCC_PIN, HIGH); // sets the digital pin on to power AM2301
   Debugln("Reading temp");
   lcd_debug(0,0,1,0);
   readTemp();
-  digitalWrite(TEMP_VCC_PIN, LOW); // sets the digital pin 13 on
 
   int p = sizeof(payload);
   int p2= sizeof(si1145data);
@@ -364,6 +424,16 @@ void loop() {
     delay(10);
     //radio.setPayloadSize(sizeof(payload)); // float datatype occupies 4 bytes
     unsigned long start_timer = micros();                    // start the timer
+
+    if (si1145Available)
+    {
+      Debug("sending si1145 packet - readoutms:");
+      Debugln(si1145data.readoutms);
+      radio.writeFast(&si1145data, sizeof(si1145data));
+      radio.txStandBy(); 
+      delay(200);
+    }
+
     //radio.writeBlocking(&payload, sizeof(payload), 2000);      // transmit & save the report
     radio.writeFast(&payload, sizeof(payload));
 
@@ -371,10 +441,6 @@ void loop() {
     //radio.txStandBy(2000);
     //radio.setPayloadSize(sizeof(si1145data)); // float datatype occupies 4 bytes
     //radio.writeBlocking(&si1145data, sizeof(si1145data), 2000);
-    if (si1145Available)
-    {
-      radio.writeFast(&si1145data, sizeof(si1145data));
-    }
     bool fifoSuccess = radio.txStandBy(2000);// Using extended timeouts, returns 1 if success. Retries failed payloads for 1 seconds before returning 0.
     unsigned long end_timer = micros();                      // end the timer
 
@@ -395,11 +461,8 @@ void loop() {
   delay(100);
   lcd_debug(0,1,0,1);
   radio.powerDown();
-  digitalWrite(TEMP_VCC_PIN, LOW); // sets the digital pin 13 on
-  digitalWrite(UV_VCC_PIN, LOW); // sets the digital pin on to power UV & Light sensor
-  digitalWrite(SENSOR_VCC_PIN, LOW); // sets the digital pin on to power UV & Light sensor
+  digitalWrite(SENSOR_VCC_ON_PIN, LOW); // sets the digital pin on to power UV & Light sensor
 
-  //delay(100);
   wdt_reset();
 
   // disable wdt while sleeping
