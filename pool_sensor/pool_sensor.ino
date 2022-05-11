@@ -16,15 +16,13 @@
 #include <avr/wdt.h>
 
 #define ONE_WIRE_BUS 2
-#define SENSOR_POWER_PIN 10
-#define NRF_POWER_PIN 5
+#define POWER_PIN 10
 #define MAX_RADIO_RETRIES 10
 #define NODE_ID 0  //pool
 
 #define TX_TIMEOUT 2000
 
-
-#define SLEEP_CYCLES_SUCCESS 150  //20 minutes on success -
+#define SLEEP_CYCLES_SUCCESS 100  //20 minutes on success -
 #define SLEEP_CYCLES 10           //80 seconds otherwise
 
 OneWire oneWire(ONE_WIRE_BUS);
@@ -62,8 +60,7 @@ void setup() {
   }
 #endif
 
-  pinMode(SENSOR_POWER_PIN, OUTPUT);  // sets the digital pin 13 as output
-  pinMode(NRF_POWER_PIN, OUTPUT);
+  pinMode(POWER_PIN, OUTPUT);  // sets the digital pin 13 as output
 
   // print example's introductory prompt
   Debugln(F("DS18B20 sensor"));
@@ -76,10 +73,11 @@ void loop() {
   payload.voltage = Vcc::measure();
   Debugln(payload.voltage);
 
-  digitalWrite(SENSOR_POWER_PIN, HIGH);  // sets the digital pin 13 on
+  digitalWrite(POWER_PIN, HIGH);  // sets the digital pin 13 on
   //for (int il = 0; il < 20;il++)
   //  delay(1000);
-  delay(10);
+  radio.powerUp();
+
 
   int sensorReady = 1;
   for (int si = 0; si < 10; si++) {
@@ -101,11 +99,6 @@ void loop() {
       break;
     }
   }
-
-  digitalWrite(SENSOR_POWER_PIN, LOW);  // sets the digital pin 13 on
-
-  digitalWrite(NRF_POWER_PIN, HIGH);  // sets the digital pin 13 on
-  delay(10);
 
   int radioReady = 1;
   int success = 0;
@@ -144,19 +137,27 @@ void loop() {
 
 
     payload.payloadID = 0;
-    radio.powerUp();
     delay(10);    
-    unsigned long start_timer = micros();                        // start the timer
-    radio.writeFast(&payload, sizeof(payload));  // transmit & save the report
-    bool report = radio.txStandBy(TX_TIMEOUT);
-    Debugln("Payload size: ");
-    Debugln(sizeof(payload));
-    unsigned long end_timer = micros();  // end the timer
+    bool report = false;
+    long transTime = 0;
+    for (int rRetries = 0; rRetries < 10;rRetries++)
+    {
+      unsigned long start_timer = micros();                        // start the timer
+      radio.writeFast(&payload, sizeof(payload));  // transmit & save the report
+      report = radio.txStandBy(TX_TIMEOUT);
+      Debugln("Payload size: ");
+      Debugln(sizeof(payload));
+      unsigned long end_timer = micros();  // end the timer
+      transTime = end_timer - start_timer;
+      if (report) break;
+      Debugln("Transmission failed - retrying");
+      delay(100);
+    }
 
     if (report) {
       Debug(F("Transmission successful! "));  // payload was delivered
       Debug(F("Time to transmit = "));
-      Debug(end_timer - start_timer);  // print the timer result
+      Debug(transTime);  // print the timer result
       Debug(F(" us. Sent: "));
       Debugln(payload.temp);  // print payload sent
       success = 1;
@@ -169,7 +170,7 @@ void loop() {
   }
 
   radio.powerDown();
-  digitalWrite(NRF_POWER_PIN, LOW);  // sets the digital pin 13 on
+  digitalWrite(POWER_PIN, LOW);  // sets the digital pin 13 on
 
   wdt_reset();
 
@@ -185,9 +186,6 @@ void loop() {
 
   for (int il = 0; il < sleep_time; il++)
     LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
-  //    LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
-  //                  SPI_OFF, USART0_OFF, TWI_OFF);
-
 
   Debugln("Sleep completed");
 #ifdef WDT_ENABLED
