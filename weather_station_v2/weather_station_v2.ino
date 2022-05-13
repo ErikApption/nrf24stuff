@@ -16,6 +16,7 @@
 #include <debug_stuff.h>
 #include <payload.h>
 #include "Adafruit_SI1145.h"
+#include <EasyLed.h>
 
 #ifdef __LGT8F__
 #include <PMU.h>
@@ -34,7 +35,14 @@
 #define LED3_PIN 4
 #define LED4_PIN 5
 
+#define ERR_RADIO 4
+#define ERR_SENSOR 3
+#define ERR_TRANS_FAILED 2
+#define ERR_SUCCESS 1
+#define ERR_CODE_CYCLES 80 // flash every 80 seconds * 80 = 6400 ~ 2 hours
+
 #define SENSOR_VCC_ON_PIN 9
+#define STATUS_LED 4
 //#define TEMP_VCC_PIN 8
 //#define UV_VCC_PIN 10
 #define VCC_PIN A1
@@ -49,11 +57,14 @@
 
 #define I2C_TIMEOUT 500
 
+int lastErrorCode = ERR_SUCCESS;
+int lastErrorCodeCycles = ERR_CODE_CYCLES;
+
 //Adafruit_VEML6075 uv = Adafruit_VEML6075();
 SI1145_WE mySI1145 = SI1145_WE(&Wire);
 Adafruit_SI1145 uvs = Adafruit_SI1145();
 uint32_t delayMS;
-
+EasyLed led(STATUS_LED, EasyLed::ActiveLevel::High); // Use this for an active-low LED.
 SHT2x sht;
 
 // instantiate an object for the nRF24L01 transceiver
@@ -316,6 +327,7 @@ bool readSI1145()
 
 void loop() {
 
+  int error_code = ERR_SUCCESS;
   Wire.setTimeout(1000);
   //Wire.setClock(10000);  
 
@@ -341,6 +353,8 @@ void loop() {
     Debug(si);
     si1145Available = readSI1145_2();
     if (si1145Available) break;
+    error_code = ERR_SENSOR;
+    led.flash(error_code);
     delay(100);
   }
 
@@ -363,11 +377,12 @@ void loop() {
   Debugln("Sending Radio packet");
   int radioReady = 1;
   int sensorReady = 1;
-  int success = 0;
   //delay(100);
   // initialize the transceiver on the SPI bus
   if (!radio.begin()) {
     Debugln("radio hardware is not responding!!");
+    error_code = ERR_RADIO;
+    led.flash(error_code);
     lcd_debug(1,0,0,1);
     radioReady = 0;
   }
@@ -449,12 +464,11 @@ void loop() {
       Debug(end_timer - start_timer);                 // print the timer result
       Debug(" us. Sent: ");
       Debugln(payload.temp);                               // print payload sent
-      success = 1;
     } else {
-      success = 0;
       Debug("Transmission failed or timed out - fifo:"); // payload was not delivered
       Debugln(fifoSuccess);
-
+      error_code = ERR_TRANS_FAILED;
+      led.flash(error_code);
       //radio.printPrettyDetails(); // (larger) function that prints human readable data`
     }
   }
@@ -471,29 +485,41 @@ void loop() {
   Debugln("Starting sleep");
   lcd_debug(0,1,1,1);
 #ifdef DEBUG_MODE
-  int sleep_time = 1;
+  int sleep_cycles = 1;
 #else
-  int sleep_time = (success == 1) ? SLEEP_CYCLES_SUCCESS : SLEEP_CYCLES;
+  int sleep_cycles = (error_code == ERR_SUCCESS) ? SLEEP_CYCLES_SUCCESS : SLEEP_CYCLES;
 #endif
 
-  for (int il = 0; il < sleep_time; il++)
+  if (error_code != ERR_SUCCESS)
+  {
+    lastErrorCode = error_code;
+    lastErrorCodeCycles = ERR_CODE_CYCLES;    
+  }
+
+  for (int il = 0; il < sleep_cycles; il++)
   {
     lcd_debug(1,0,1,0);
-
-
 #ifdef __LGT8F__
     Debugln("entering LGT8F sleep");                               // print payload sent
 
     bitClear(ADCSRA, ADEN);
     PMU.sleep(PM_POWERDOWN, SLEEP);
-    bitSet(ADCSRA, ADEN);      
-
+    bitSet(ADCSRA, ADEN);
 #else
     Debugln("entering arduino sleep");                               // print payload sent
     LowPower.powerDown(SLEEP, ADC_OFF, BOD_ON);
 #endif
-    
 
+    if (il % 4 == 0) //every 32 seconds
+    {
+      if (lastErrorCodeCycles == 0)
+      {
+        lastErrorCode = error_code;
+      }
+      led.flash(lastErrorCode);
+      if (lastErrorCodeCycles > 0)
+        lastErrorCodeCycles--;
+    }
   }
   Debugln("End sleep");  
   lcd_debug(1,1,1,1);
