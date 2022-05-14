@@ -30,19 +30,15 @@
   #define SLEEP SLEEP_8S
 #endif
 
-#define LED1_PIN 2
-#define LED2_PIN 3
-#define LED3_PIN 4
-#define LED4_PIN 5
-
 #define ERR_RADIO 4
-#define ERR_SENSOR 3
-#define ERR_TRANS_FAILED 2
+#define ERR_TEMP_SENSOR 3
+#define ERR_VIS_SENSOR 2
+#define ERR_TRANS_FAILED 5
 #define ERR_SUCCESS 1
 #define ERR_CODE_CYCLES 80 // flash every 80 seconds * 80 = 6400 ~ 2 hours
 
 #define SENSOR_VCC_ON_PIN 9
-#define STATUS_LED 4
+#define STATUS_LED 8
 //#define TEMP_VCC_PIN 8
 //#define UV_VCC_PIN 10
 #define VCC_PIN A1
@@ -95,15 +91,6 @@ void setup() {
   wdt_enable(WDTO_8S);
 #endif
 
-#ifdef LED_DEBUG
-  pinMode(LED1_PIN, OUTPUT);
-  pinMode(LED2_PIN, OUTPUT);
-  pinMode(LED3_PIN, OUTPUT);
-  pinMode(LED4_PIN, OUTPUT);
-  lcd_debug(1,1,1,1);
-  delay(500);
-#endif
-
 #ifdef DEBUG_MODE
   Serial.begin(115200);
   while (!Serial) {
@@ -112,12 +99,9 @@ void setup() {
   Serial.println("Debug mode enabled");
 #endif
 
-  lcd_debug(1,1,1,0);
-
   pinMode(SENSOR_VCC_ON_PIN, OUTPUT);
   pinMode(VCC_PIN, INPUT);
   Debugln("Ready...");
-  lcd_debug(1,1,0,0);
 
   delayMS = 100;
 
@@ -125,25 +109,14 @@ void setup() {
   //Wire.setClock(10000);  
   Wire.begin();
   //Wire.setTimeout(I2C_TIMEOUT);
-  lcd_debug(1,0,0,0);
 
 } // setup
-
-void lcd_debug(bool led1,bool led2,bool led3,bool led4)
-{
-#ifdef LED_DEBUG  
-  digitalWrite(LED1_PIN, led1? HIGH:LOW);
-  digitalWrite(LED2_PIN, led2? HIGH:LOW);
-  digitalWrite(LED3_PIN, led3? HIGH:LOW);
-  digitalWrite(LED4_PIN, led4? HIGH:LOW);
-#endif  
-}
 
 double prevTemp = 0;
 
 //float SI7021_temperature = NAN;
 //float SI7021_humidity = NAN;
-void readTemp(void)
+bool readTemp(void)
 {
   unsigned long start_timer = micros();  
   sht.begin(&Wire);
@@ -151,11 +124,9 @@ void readTemp(void)
   payload.humidity = NAN;
   payload.temp = NAN;
   Debugln("Reading temperature");
-
+  bool success =false;
   if ( sht.isConnected()  )
   {
-
-    int success = 0;
     int retries = 0;
     for (retries; retries < MAX_TEMP_RETRIES; retries++)
     {
@@ -170,8 +141,10 @@ void readTemp(void)
       int isValid = abs(payload.temp - prevTemp) <= 20;
       prevTemp = payload.temp;
       if (payload.temp != NAN && isValid)
+      {
+        success = true;
         break;
-
+      }
       Debug("Retries: ");
       Debug(retries);
     }
@@ -179,10 +152,12 @@ void readTemp(void)
   else
   {
     Debugln("SHT is not connected");    
+    
   }
   unsigned long end_timer = micros();  
   payload.readoutms = end_timer - start_timer;
   Debug(" readoutms:");Debug(payload.readoutms);Debug(" ");
+  return success;
 }
 
 #define VOLTAGE_MEASUREMENTS 5
@@ -203,8 +178,6 @@ bool readSI1145_2()
 {
   unsigned long start_timer = micros();
 
-  Debugln("SI1145 - initialized");
-  
   if (!uvs.begin(&Wire))
   {
     return false;
@@ -331,7 +304,6 @@ void loop() {
   Wire.setTimeout(1000);
   //Wire.setClock(10000);  
 
-  lcd_debug(0,0,0,0);
   wdt_reset();
 #ifdef WDT_ENABLED
   wdt_enable(WDTO_8S);
@@ -345,22 +317,29 @@ void loop() {
   //payload.voltage = readA0_Voltage_mV();
   Debugln(payload.voltage);
 
-  lcd_debug(0,0,0,1);
   bool si1145Available = false;
   for (int si=0;si < 10;si++)
   {
     Debug("Reading SI1145 test");  
-    Debug(si);
+    Debugln(si);
     si1145Available = readSI1145_2();
     if (si1145Available) break;
-    error_code = ERR_SENSOR;
-    led.flash(error_code);
     delay(100);
+  }
+  if (!si1145Available)
+  {
+    error_code = ERR_VIS_SENSOR;
+    led.flash(error_code);
+    delay(200);
   }
 
   Debugln("Reading temp");
-  lcd_debug(0,0,1,0);
-  readTemp();
+
+  if (!readTemp())
+  {
+    error_code = ERR_TEMP_SENSOR;
+    led.flash(error_code);
+  }
 
   int p = sizeof(payload);
   int p2= sizeof(si1145data);
@@ -372,8 +351,6 @@ void loop() {
   if (p > 32) Debugln("!!Warning!! invalid payload size");
 #endif
 
-  lcd_debug(0,0,1,1);
-
   Debugln("Sending Radio packet");
   int radioReady = 1;
   int sensorReady = 1;
@@ -383,7 +360,6 @@ void loop() {
     Debugln("radio hardware is not responding!!");
     error_code = ERR_RADIO;
     led.flash(error_code);
-    lcd_debug(1,0,0,1);
     radioReady = 0;
   }
   else
@@ -473,7 +449,7 @@ void loop() {
     }
   }
   delay(100);
-  lcd_debug(0,1,0,1);
+
   radio.powerDown();
   digitalWrite(SENSOR_VCC_ON_PIN, LOW); // sets the digital pin on to power UV & Light sensor
 
@@ -483,7 +459,7 @@ void loop() {
   wdt_disable();
 
   Debugln("Starting sleep");
-  lcd_debug(0,1,1,1);
+
 #ifdef DEBUG_MODE
   int sleep_cycles = 1;
 #else
@@ -498,7 +474,6 @@ void loop() {
 
   for (int il = 0; il < sleep_cycles; il++)
   {
-    lcd_debug(1,0,1,0);
 #ifdef __LGT8F__
     Debugln("entering LGT8F sleep");                               // print payload sent
 
@@ -510,7 +485,7 @@ void loop() {
     LowPower.powerDown(SLEEP, ADC_OFF, BOD_ON);
 #endif
 
-    if (il % 4 == 0) //every 32 seconds
+    if (il % 8 == 0) //every 64 seconds
     {
       if (lastErrorCodeCycles == 0)
       {
@@ -522,7 +497,6 @@ void loop() {
     }
   }
   Debugln("End sleep");  
-  lcd_debug(1,1,1,1);
 
 #ifdef WDT_ENABLED
   wdt_enable(WDTO_8S);
