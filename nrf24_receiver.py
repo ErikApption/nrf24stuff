@@ -47,7 +47,7 @@ node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
 node_roots = ["pool", "weather", "hottub","garden"]
 
 
-def slave(timeout=298):
+def slave(timeout=1198): #//20 minutes restart
     """Listen for any payloads and print the transaction
 
     :param int timeout: The number of seconds to wait (with no transmission)
