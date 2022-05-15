@@ -1,0 +1,6 @@
+{
+    "configuration": "cpu=8MHzatmega328",
+    "board": "arduino:avr:pro",
+    "port": "COM5",
+    "sketch": "weather_station_v2.ino","output": "build"
+}
