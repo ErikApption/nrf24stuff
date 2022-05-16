@@ -12,6 +12,8 @@ import numpy as np
 from RF24 import RF24, RF24_PA_LOW
 import paho.mqtt.client as paho
 import os.path
+import RPi.GPIO as GPIO
+import threading
 
 ########### USER CONFIGURATION ###########
 # See https:#github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
@@ -24,7 +26,7 @@ import os.path
 # Generic:
 radio = RF24(22, 0)
 
-IRQ_PIN = 7
+IRQ_PIN = 27
 
 ################## Linux (BBB,x86,etc) #########################
 # See http:#nRF24.github.io/RF24/pages.html for more information on usage
@@ -46,8 +48,192 @@ node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
 # node_roots =  ["hottub","weather","pool"]
 node_roots = ["pool", "weather", "hottub","garden"]
 
+def interrupt_handler(channel):
+    """This function is called when IRQ pin is detected active LOW"""
+    #print("IRQ pin", channel, "went active LOW.")
+    tx_ds, tx_df, rx_dr = radio.whatHappened()   # get IRQ status flags
+    if tx_df:
+        radio.flush_tx()
+    print("Interrupt - tx_ds: {}, tx_df: {}, rx_dr: {}".format(tx_ds, tx_df, rx_dr))
+    if rx_dr:
+        process_payload()
 
-def slave(timeout=1198): #//20 minutes restart
+# setup IRQ GPIO pin
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(IRQ_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.add_event_detect(IRQ_PIN, GPIO.FALLING, callback=interrupt_handler)
+
+def process_payload():
+    has_payload, pipe_number = radio.available_pipe()
+    if has_payload:        
+        payloadLen = radio.getDynamicPayloadSize()
+        # fetch 1 payload from RX FIFO
+        buffer = radio.read(payloadLen)
+        print("payload received... pipe:{} buffer:{} radio payload:{}".format(
+            pipe_number, len(buffer), payloadLen))
+
+        t = threading.Thread(target=process_payload2,args=(pipe_number,buffer))
+        t.start()
+    else:
+        print("weird - IRQ triggered but no payload ???!!!")
+
+def process_payload2(pipe_number,buffer):
+    # use struct.unpack() to convert the buffer into usable data
+    # expecting a little endian float, thus the format string "<f"
+    # buffer[:4] truncates padded 0s in case payloadSize was not set
+
+
+    # # publish data
+    # client.connect("openhab.local", 1883, 60)
+
+    # client.loop_start()
+
+    qos = 2
+    retain = True
+    published = False
+
+    bufStart = 0
+    bufEnd = 0
+    # unsigned long nodeID;
+    bufStart = bufEnd
+    bufEnd = bufStart + struct.calcsize('b')
+    nodeID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
+
+    # unsigned long payloadID;
+    bufStart = bufEnd
+    bufEnd = bufStart + struct.calcsize('b')
+    payloadID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
+    if (payloadID == 0):
+        # float temp;
+        bufStart = bufEnd
+        bufEnd = bufStart + struct.calcsize('f')
+        temp = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+
+        # float voltage;
+        bufStart = bufEnd
+        bufEnd = bufStart + struct.calcsize('f')
+        voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        # convert mv to V
+        if voltage > 0:
+            voltage = voltage * 1.0 / 1000.0
+
+        # float humidity;
+        bufStart = bufEnd
+        bufEnd = bufStart + struct.calcsize('f')
+        humidity = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+
+        TryPublish(node_roots[nodeID] +
+                    "/Arduino/Voltage", voltage, qos, retain)
+
+        if (nodeID == 0 or nodeID == 2):
+            TryPublish(
+                node_roots[nodeID] + "/DS18B20/Temperature", temp, qos, retain)
+        elif nodeID == 1:
+            TryPublish(node_roots[nodeID] +
+                        "/DHT/Temperature", temp, qos, retain)
+            TryPublish(node_roots[nodeID] +
+                        "/DHT/Humidity", humidity, qos, retain)
+
+        print("{} {} Data T:{:0.2f} V:{} H:{}%".format(
+            str(datetime.datetime.now()), pipe_number, temp, voltage, humidity))
+
+        fullPath = os.path.expanduser(
+            "~/last_update_{}.txt".format(nodeID))
+        with open(fullPath, 'w') as last_update:
+            last_update.write("Pipe {} NodeID {} PayloadID {}".format(
+                pipe_number, nodeID, payloadID))
+            last_update.write(" Temp: {0:0.1f} °C".format(temp) + "\n")
+            last_update.write(
+                "Voltage (abs): {0:0.1f}".format(voltage) + "\n")
+            last_update.write("Humidity {}".format(humidity))
+            # last_update.write("Humidity {} UV {} UVa {} UVb {}".format(humidity,uv_index,uv_a,uv_b))
+            last_update.write("\n")
+
+    elif payloadID == 1:
+        # debug buffer
+        vhex = np.vectorize(hex)
+        # print("buffer={}".format(vhex(buffer)))
+        # unsigned long amb_als;
+        bufStart = bufEnd
+        bufEnd = bufStart + struct.calcsize('L')
+        amb_als = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
+
+        # unsigned long amb_ir;
+        bufStart = bufEnd
+        bufEnd = bufStart + struct.calcsize('L')
+        amb_ir = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
+        #print("amb_ir={}".format(vhex(buffer[bufStart:bufEnd])))
+
+        # float uv_index;
+        bufStart = bufEnd;
+        bufEnd = bufStart + struct.calcsize('f');
+        uv_index = 1.0 * struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        # https:#github.com/adafruit/Adafruit_SI1145_Library/blob/master/examples/si1145test/si1145test.ino
+        uv_index = uv_index / 100.0; # the index is multiplied by 100 
+
+        # float uv_index;
+        bufStart = bufEnd;
+        bufEnd = bufStart + struct.calcsize('L');
+        readout_ms = struct.unpack("<L", buffer[bufStart:bufEnd])[0]                
+                            
+        lux = calcLux(amb_als,amb_ir)
+        TryPublish(node_roots[nodeID] +
+                    "/GY1145/AL", amb_als, qos, retain)
+        TryPublish(node_roots[nodeID] +
+                    "/GY1145/IR", amb_ir, qos, retain)
+        TryPublish(node_roots[nodeID] +
+                    "/GY1145/UV", uv_index, qos, retain)      
+        TryPublish(node_roots[nodeID] +
+                    "/GY1145/Luminosity", lux, qos, retain)                                                
+        print("{} {} Data AmbALS:{} AmbIR:{} UV:{:0.2f} Lux:{} - {} ms".format(
+            str(datetime.datetime.now()), pipe_number, amb_als, amb_ir,uv_index,lux,readout_ms))
+
+    elif payloadID == 3:
+        # unsigned int lux; should be 4 bytes but is 2
+        bufStart = bufEnd
+        bufEnd = bufStart + struct.calcsize('f')
+        luxValue = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+                            
+        TryPublish(node_roots[nodeID] +
+                    "/TSL2261/LUX", luxValue, qos, retain)
+
+        # float voltage;
+        bufStart = bufEnd
+        bufEnd = bufStart + struct.calcsize('f')
+        voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        # convert mv to V
+        if voltage > 0:
+            voltage = voltage * 1.0 / 1000.0
+
+        TryPublish(node_roots[nodeID] +
+                    "/Arduino/Voltage", voltage, qos, retain)
+
+        print("{} {} Data Lux:{} V:{}".format(
+            str(datetime.datetime.now()), pipe_number, luxValue,voltage))
+
+    else:
+        print("invalid payload id:{}".format(payloadID))
+
+    # debug
+
+
+        # TryPublish(node_roots[nodeID] + "/TSL2561/Lux",luxMeasure,qos, retain)
+        # TryPublish(node_roots[nodeID] + "/VEML6075/UVi",uv_index,qos, retain)
+        # TryPublish(node_roots[nodeID] + "/VEML6075/UVa",uv_a,qos, retain)
+        # TryPublish(node_roots[nodeID] + "/VEML6075/UVb",uv_b,qos, retain)
+        # print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
+    #client.loop_stop()
+    # print details about the received packet
+    print(
+        "{} {} Received {} bytes - node {} - payload {}".format(
+            str(datetime.datetime.now()
+                ), pipe_number, radio.payloadSize, nodeID, payloadID
+        )
+    )
+    # start_timer = time.monotonic()  # reset the timeout timer
+
+
+def listen(timeout=1198): #//20 minutes restart
     """Listen for any payloads and print the transaction
 
     :param int timeout: The number of seconds to wait (with no transmission)
@@ -58,167 +244,10 @@ def slave(timeout=1198): #//20 minutes restart
 
     start_timer = time.monotonic()
     while (time.monotonic() - start_timer) < timeout:
-        has_payload, pipe_number = radio.available_pipe()
-        if has_payload:
-            payloadLen = radio.getDynamicPayloadSize()
-            # fetch 1 payload from RX FIFO
-            buffer = radio.read(payloadLen)
-            # use struct.unpack() to convert the buffer into usable data
-            # expecting a little endian float, thus the format string "<f"
-            # buffer[:4] truncates padded 0s in case payloadSize was not set
-            print("payload received... pipe:{} buffer:{} radio payload:{}".format(
-                pipe_number, len(buffer), payloadLen))
-
-            # publish data
-            client.connect("openhab.local", 1883, 60)
-
-            client.loop_start()
-
-            qos = 2
-            retain = True
-            published = False
-
-            bufStart = 0
-            bufEnd = 0
-            # unsigned long nodeID;
-            bufStart = bufEnd
-            bufEnd = bufStart + struct.calcsize('b')
-            nodeID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
-
-            # unsigned long payloadID;
-            bufStart = bufEnd
-            bufEnd = bufStart + struct.calcsize('b')
-            payloadID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
-            if (payloadID == 0):
-                # float temp;
-                bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('f')
-                temp = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
-
-                # float voltage;
-                bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('f')
-                voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
-                # convert mv to V
-                if voltage > 0:
-                    voltage = voltage * 1.0 / 1000.0
-
-                # float humidity;
-                bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('f')
-                humidity = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
-
-                TryPublish(node_roots[nodeID] +
-                           "/Arduino/Voltage", voltage, qos, retain)
-
-                if (nodeID == 0 or nodeID == 2):
-                    TryPublish(
-                        node_roots[nodeID] + "/DS18B20/Temperature", temp, qos, retain)
-                elif nodeID == 1:
-                    TryPublish(node_roots[nodeID] +
-                               "/DHT/Temperature", temp, qos, retain)
-                    TryPublish(node_roots[nodeID] +
-                               "/DHT/Humidity", humidity, qos, retain)
-
-                print("{} {} Data T:{:0.2f} V:{} H:{}%".format(
-                    str(datetime.datetime.now()), pipe_number, temp, voltage, humidity))
-
-                fullPath = os.path.expanduser(
-                    "~/last_update_{}.txt".format(nodeID))
-                with open(fullPath, 'w') as last_update:
-                    last_update.write("Pipe {} NodeID {} PayloadID {}".format(
-                        pipe_number, nodeID, payloadID))
-                    last_update.write(" Temp: {0:0.1f} °C".format(temp) + "\n")
-                    last_update.write(
-                        "Voltage (abs): {0:0.1f}".format(voltage) + "\n")
-                    last_update.write("Humidity {}".format(humidity))
-                    # last_update.write("Humidity {} UV {} UVa {} UVb {}".format(humidity,uv_index,uv_a,uv_b))
-                    last_update.write("\n")
-
-            elif payloadID == 1:
-                # debug buffer
-                vhex = np.vectorize(hex)
-                # print("buffer={}".format(vhex(buffer)))
-                # unsigned long amb_als;
-                bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('L')
-                amb_als = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
-
-                # unsigned long amb_ir;
-                bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('L')
-                amb_ir = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
-                #print("amb_ir={}".format(vhex(buffer[bufStart:bufEnd])))
-
-                # float uv_index;
-                bufStart = bufEnd;
-                bufEnd = bufStart + struct.calcsize('f');
-                uv_index = 1.0 * struct.unpack("<f", buffer[bufStart:bufEnd])[0]
-                # https:#github.com/adafruit/Adafruit_SI1145_Library/blob/master/examples/si1145test/si1145test.ino
-                uv_index = uv_index / 100.0; # the index is multiplied by 100 
-
-                # float uv_index;
-                bufStart = bufEnd;
-                bufEnd = bufStart + struct.calcsize('L');
-                readout_ms = struct.unpack("<L", buffer[bufStart:bufEnd])[0]                
-                                 
-                lux = calcLux(amb_als,amb_ir)
-                TryPublish(node_roots[nodeID] +
-                           "/GY1145/AL", amb_als, qos, retain)
-                TryPublish(node_roots[nodeID] +
-                           "/GY1145/IR", amb_ir, qos, retain)
-                TryPublish(node_roots[nodeID] +
-                           "/GY1145/UV", uv_index, qos, retain)      
-                TryPublish(node_roots[nodeID] +
-                           "/GY1145/Luminosity", lux, qos, retain)                                                
-                print("{} {} Data AmbALS:{} AmbIR:{} UV:{:0.2f} Lux:{} - {} ms".format(
-                    str(datetime.datetime.now()), pipe_number, amb_als, amb_ir,uv_index,lux,readout_ms))
-
-            elif payloadID == 3:
-                # unsigned int lux; should be 4 bytes but is 2
-                bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('f')
-                luxValue = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
-                                 
-                TryPublish(node_roots[nodeID] +
-                           "/TSL2261/LUX", luxValue, qos, retain)
-
-                # float voltage;
-                bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('f')
-                voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
-                # convert mv to V
-                if voltage > 0:
-                    voltage = voltage * 1.0 / 1000.0
-
-                TryPublish(node_roots[nodeID] +
-                           "/Arduino/Voltage", voltage, qos, retain)
-
-                print("{} {} Data Lux:{} V:{}".format(
-                    str(datetime.datetime.now()), pipe_number, luxValue,voltage))
-
-            else:
-                print("invalid payload id:{}".format(payloadID))
-
-            # debug
-
-
-                # TryPublish(node_roots[nodeID] + "/TSL2561/Lux",luxMeasure,qos, retain)
-                # TryPublish(node_roots[nodeID] + "/VEML6075/UVi",uv_index,qos, retain)
-                # TryPublish(node_roots[nodeID] + "/VEML6075/UVa",uv_a,qos, retain)
-                # TryPublish(node_roots[nodeID] + "/VEML6075/UVb",uv_b,qos, retain)
-                # print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
-            client.loop_stop()
-            # print details about the received packet
-            print(
-                "{} {} Received {} bytes - node {} - payload {}".format(
-                    str(datetime.datetime.now()
-                        ), pipe_number, radio.payloadSize, nodeID, payloadID
-                )
-            )
-            # start_timer = time.monotonic()  # reset the timeout timer
-        else:
-            time.sleep(0.1)
+        time.sleep(10)
+        #has_payload, pipe_number = radio.available_pipe()
+        #if has_payload:        
+        #   process_payload(pipe_number):
     print("{} - No data received - Leaving RX role...".format(str(datetime.datetime.now())))
     # recommended behavior is to keep in TX mode while idle
     radio.stopListening()  # put the radio in TX mode
@@ -303,9 +332,21 @@ if __name__ == "__main__":
     # (larger) function that prints human readable data
     # radio.printPrettyDetails()
 
+    # on data ready test
+    #Configuring IRQ pin to only ignore 'on data sent' event
+    radio.maskIRQ(True, False, False)  # args = tx_ds, tx_df, rx_dr
+
+    # connect mqtt broker
+    client.connect("openhab.local", 1883, 60)
+
+    client.loop_start()
+    print("connected to MQTT broker")
+
     try:
-        slave()
+        listen()
+        client.loop_stop()
     except KeyboardInterrupt:
         print(" Keyboard Interrupt detected. Exiting...")
         radio.powerDown()
+        client.loop_stop()
         sys.exit()
