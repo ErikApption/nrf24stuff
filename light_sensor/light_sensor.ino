@@ -1,8 +1,6 @@
-
-
 //#define DEBUG_MODE
+#include <BH1750.h>
 #define WDT_ENABLED
-//#define LED_DEBUG
 //#include <SPI.h>
 #include "printf.h"
 #include "RF24.h"
@@ -28,19 +26,13 @@
   #define SLEEP SLEEP_8S
 #endif
 
-#define LED1_PIN 2
-#define LED2_PIN 3
-#define LED3_PIN 4
-#define LED4_PIN 5
-
-#define SENSOR_VCC_PIN 9
+#define SENSOR_VCC_PIN 8
 #define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
 #define MAX_TEMP_RETRIES 2
 #define NODE_ID 3
-#define DHT_PIN 5
 
-#define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
+#define SLEEP_CYCLES_SUCCESS 37 //5 minutes on success - 
 #define SLEEP_CYCLES 10 //80 seconds otherwise
 
 #define I2C_TIMEOUT 500
@@ -62,23 +54,14 @@ uint8_t nodes[][6] = {"2Node", "3Node", "4Node", "5Node"};
 // to use different addresses on a pair of radios, we need a variable to
 // uniquely identify which address this radio will use to transmit
 
-Adafruit_TSL2561_Unified tsl = Adafruit_TSL2561_Unified(TSL2561_ADDR_FLOAT, 12345);
+BH1750 lightSensor;
 
-TSLPayLoad tslPayload;
+BH1750Payload payload;
 
 void setup() {
 
 #ifdef WDT_ENABLED
   wdt_enable(WDTO_8S);
-#endif
-
-#ifdef LED_DEBUG
-  pinMode(LED1_PIN, OUTPUT);
-  pinMode(LED2_PIN, OUTPUT);
-  pinMode(LED3_PIN, OUTPUT);
-  pinMode(LED4_PIN, OUTPUT);
-  lcd_debug(1,1,1,1);
-  delay(500);
 #endif
 
 #ifdef DEBUG_MODE
@@ -89,12 +72,9 @@ void setup() {
   Serial.println("Debug mode enabled");
 #endif
 
-  lcd_debug(1,1,1,0);
-
   pinMode(SENSOR_VCC_PIN, OUTPUT);
   pinMode(VCC_PIN, INPUT);
   Debugln("Ready...");
-  lcd_debug(1,1,0,0);
 
   delayMS = 100;
 
@@ -102,67 +82,35 @@ void setup() {
   //Wire.setClock(10000);  
   Wire.begin();
   //Wire.setTimeout(I2C_TIMEOUT);
-  lcd_debug(1,0,0,0);
+
 
 } // setup
 
-void lcd_debug(bool led1,bool led2,bool led3,bool led4)
-{
-#ifdef LED_DEBUG  
-  digitalWrite(LED1_PIN, led1? HIGH:LOW);
-  digitalWrite(LED2_PIN, led2? HIGH:LOW);
-  digitalWrite(LED3_PIN, led3? HIGH:LOW);
-  digitalWrite(LED4_PIN, led4? HIGH:LOW);
-#endif  
-}
 
-
-bool readTSLLux()
+#define READ_RETRIES 5
+bool readLux()
 {
 
-  tslPayload.lux = 0;
-  /* You can also manually set the gain or enable auto-gain support */
-  // tsl.setGain(TSL2561_GAIN_1X);      /* No gain ... use in bright light to avoid sensor saturation */
-  // tsl.setGain(TSL2561_GAIN_16X);     /* 16x gain ... use in low light to boost sensitivity */
-  tsl.enableAutoRange(true);            /* Auto-gain ... switches automatically between 1x and 16x */
-  
-  /* Changing the integration time gives you better sensor resolution (402ms = 16-bit data) */
-  //tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_13MS);      /* fast but low resolution */
-  tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_101MS);  /* medium resolution and speed   */
-  // tsl.setIntegrationTime(TSL2561_INTEGRATIONTIME_402MS);  /* 16-bit data but slowest conversions */  
+  payload.lux = 0;
+  digitalWrite(SENSOR_VCC_PIN, HIGH); // sets the digital pin 13 on
+  delay(10);
 
-  /* Initialise the sensor */
-  //use tsl.begin() to default to Wire, 
-  //tsl.begin(&Wire2) directs api to use Wire2, etc.
-  if(!tsl.begin(&Wire))
-  {
-    /* There was a problem detecting the TSL2561 ... check your connections */
-    Debugln("Ooops, no TSL2561 detected ... Check your wiring or I2C ADDR!");    
-    return false;
-  }  
+  lightSensor.begin();
+  delay(200);
 
   unsigned long start_timer = micros();
-  /* Get a new sensor event */ 
-  sensors_event_t event;
-  tsl.getEvent(&event);
-  bool success =false;
-  /* Display the results (light is measured in lux) */
-  if (event.light)
+  for (int retries = 0; retries < READ_RETRIES; retries++)
   {
-    Debug(event.light); Debugln(" lux");
-    tslPayload.lux = event.light;
-    success = true;
+      payload.lux += lightSensor.readLightLevel();
   }
-  else
-  {
-    /* If event.light = 0 lux the sensor is probably saturated
-       and no reliable data could be generated! */
-    Debugln("Sensor overload");
-    tslPayload.lux = 0;
-  }
+  payload.lux /= READ_RETRIES;
+
+  digitalWrite(SENSOR_VCC_PIN, LOW); // sets the digital pin 13 on
+  Debug("Light=");
+  Debugln(payload.lux);
   unsigned long end_timer = micros();
-  tslPayload.readoutms = end_timer-start_timer;
-  return success;
+  payload.readoutms = end_timer-start_timer;
+  return true;
 }
 
 void loop() {
@@ -170,22 +118,18 @@ void loop() {
   Wire.setTimeout(1000);
   //Wire.setClock(10000);  
 
-  lcd_debug(0,0,0,0);
   wdt_reset();
 #ifdef WDT_ENABLED
   wdt_enable(WDTO_8S);
 #endif
 
   Debug("Reading voltage ");
-  tslPayload.voltage = Vcc::measure();
+  payload.voltage = Vcc::measure();
   //payload.voltage = readA0_Voltage_mV();
-  Debugln(tslPayload.voltage);
+  Debugln(payload.voltage);
 
-  lcd_debug(0,0,0,1);
   Debug("Reading Lux ");  
-  bool luxAvailable = readTSLLux();
-
-  lcd_debug(0,0,1,1);
+  bool luxAvailable = readLux();
 
   Debugln("Sending Radio packet");
   int radioReady = 1;
@@ -195,7 +139,6 @@ void loop() {
   // initialize the transceiver on the SPI bus
   if (!radio.begin()) {
     Debugln("radio hardware is not responding!!");
-    lcd_debug(1,0,0,1);
     radioReady = 0;
   }
   else
@@ -238,15 +181,15 @@ void loop() {
     //    payload.temp = sensor.getTempC(); TOFIX
     //    payload.voltage = analogRead(A1);
 
-    tslPayload.nodeID = NODE_ID;
-    tslPayload.payloadID = 3;
+    payload.nodeID = NODE_ID;
+    payload.payloadID = 3;
 
     radio.powerUp(); //This will take up to 5ms for maximum compatibility
     delay(10);
     //radio.setPayloadSize(sizeof(payload)); // float datatype occupies 4 bytes
     unsigned long start_timer = micros();                    // start the timer
 
-    radio.writeFast(&tslPayload, sizeof(tslPayload));
+    radio.writeFast(&payload, sizeof(payload));
     bool fifoSuccess = radio.txStandBy(2000);// Using extended timeouts, returns 1 if success. Retries failed payloads for 1 seconds before returning 0.
     unsigned long end_timer = micros();                      // end the timer
 
@@ -264,7 +207,6 @@ void loop() {
     }
   }
   delay(100);
-  lcd_debug(0,1,0,1);
   radio.powerDown();
 
   //delay(100);
@@ -274,7 +216,6 @@ void loop() {
   wdt_disable();
 
   Debugln("Starting sleep");
-  lcd_debug(0,1,1,1);
 #ifdef DEBUG_MODE
   int sleep_time = 1;
 #else
@@ -283,8 +224,6 @@ void loop() {
 
   for (int il = 0; il < sleep_time; il++)
   {
-    lcd_debug(1,0,1,0);
-
 
 #ifdef __LGT8F__
     Debugln("entering LGT8F sleep");                               // print payload sent
@@ -301,7 +240,6 @@ void loop() {
 
   }
   Debugln("End sleep");  
-  lcd_debug(1,1,1,1);
 
 #ifdef WDT_ENABLED
   wdt_enable(WDTO_8S);

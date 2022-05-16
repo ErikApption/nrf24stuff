@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+/.vs/NRFSensors/FileContentIndex
+/light_sensor/.vs
+/light_sensor/Release
+/light_sensor/__vm
+/pool_sensor/__vm
+/.vs/NRFSensors/v17
