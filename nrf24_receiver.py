@@ -47,7 +47,7 @@ node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
 node_roots = ["pool", "weather", "hottub","garden"]
 
 
-def slave(timeout=298):
+def slave(timeout=1198): #//20 minutes restart
     """Listen for any payloads and print the transaction
 
     :param int timeout: The number of seconds to wait (with no transmission)
@@ -177,8 +177,8 @@ def slave(timeout=298):
             elif payloadID == 3:
                 # unsigned int lux; should be 4 bytes but is 2
                 bufStart = bufEnd
-                bufEnd = bufStart + struct.calcsize('H')
-                luxValue = struct.unpack("<H", buffer[bufStart:bufEnd])[0]
+                bufEnd = bufStart + struct.calcsize('f')
+                luxValue = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
                                  
                 TryPublish(node_roots[nodeID] +
                            "/TSL2261/LUX", luxValue, qos, retain)
