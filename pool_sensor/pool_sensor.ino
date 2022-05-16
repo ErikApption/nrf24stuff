@@ -28,7 +28,7 @@
 #define MAX_RADIO_RETRIES 10
 #define NODE_ID 0 // pool
 
-#define TX_TIMEOUT 2000
+#define TX_TIMEOUT 10000 // 10 seconds
 
 #define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
 #define SLEEP_CYCLES 10          // 80 seconds otherwise

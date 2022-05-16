@@ -133,3 +133,6 @@ dmypy.json
 /light_sensor/__vm
 /pool_sensor/__vm
 /.vs/NRFSensors/v17
+/temp_sender/__vm
+/weather_station_v2/__vm
+/temp_sender2/__vm
