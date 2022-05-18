@@ -13,6 +13,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "weather_station_v2", "weath
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "temp_sender2", "temp_sender2\temp_sender2.vcxproj", "{20809531-1D76-4A9D-B62A-D909D124E0F3}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "weatherstation_watchdog", "weatherstation_watchdog\weatherstation_watchdog.vcxproj", "{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -35,6 +37,10 @@ Global
 		{20809531-1D76-4A9D-B62A-D909D124E0F3}.Debug|x86.Build.0 = Debug|Win32
 		{20809531-1D76-4A9D-B62A-D909D124E0F3}.Release|x86.ActiveCfg = Release|Win32
 		{20809531-1D76-4A9D-B62A-D909D124E0F3}.Release|x86.Build.0 = Release|Win32
+		{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}.Debug|x86.ActiveCfg = Debug|Win32
+		{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}.Debug|x86.Build.0 = Debug|Win32
+		{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}.Release|x86.ActiveCfg = Release|Win32
+		{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
