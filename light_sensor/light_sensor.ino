@@ -26,7 +26,7 @@
   #define SLEEP SLEEP_8S
 #endif
 
-#define SENSOR_VCC_PIN 8
+#define SENSOR_VCC_PIN 2
 #define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
 #define MAX_TEMP_RETRIES 2
