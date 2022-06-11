@@ -1,8 +1,10 @@
 
 
-#define DEBUG_MODE
+//#define DEBUG_MODE
 
-#define WDT_ENABLED
+//#define WDT_ENABLED
+
+#define USE_BOARD_POWER
 
 #include <SPI.h>
 #include "printf.h"
@@ -14,7 +16,7 @@
 #include <avr/wdt.h>
 #include <EasyLed.h>
 #include "AM232X.h"
-
+#include <AM2320_asukiaaa.h>
 
 #define ERR_RADIO 4
 #define ERR_SENSOR 3
@@ -23,28 +25,29 @@
 #define ERR_CODE_CYCLES 80 // flash every 80 seconds * 80 = 6400 ~ 2 hours
 
 #define RADIO_POWER_PIN 3
-#define SENSOR_POWER_PIN 2
+#define SENSOR_POWER_PIN 10
 #define STATUS_LED 4
 #define MAX_RADIO_RETRIES 10
 #define NODE_ID 4 // fridge
 
 #define TX_TIMEOUT 10000 // 10 seconds
 
-#define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
-#define SLEEP_CYCLES_ERROR 10          // 80 seconds otherwise
+#define SLEEP_CYCLES_SUCCESS 75 // 10 minutes on success -
+#define SLEEP_CYCLES_ERROR 10	// 80 seconds otherwise
 
 int lastErrorCode = ERR_SUCCESS;
 int lastErrorCodeCycles = ERR_CODE_CYCLES;
 
 AM232X AM2320;
+AM2320_asukiaaa mySensor;
 
 // instantiate an object for the nRF24L01 transceiver
-RF24 radio(5, 6);                                    // using pin 5 for the CE pin, and pin 6 for the CSN pin
+RF24 radio(5, 6);									 // using pin 5 for the CE pin, and pin 6 for the CSN pin
 EasyLed led(STATUS_LED, EasyLed::ActiveLevel::High); // Use this for an active-low LED.
 
 // Let these addresses be used for the pair
 const uint8_t receiver_address[6] = "1Node";
-const uint8_t nodes[][6] = { "2Node", "3Node", "4Node", "5Node" };
+const uint8_t nodes[][6] = {"2Node", "3Node", "4Node", "5Node", "6Node", "7Node"};
 // It is very helpful to think of an address as a path instead of as
 // an identifying device destination
 
@@ -73,29 +76,104 @@ void setup()
 	}
 #endif
 
-	pinMode(RADIO_POWER_PIN, OUTPUT); // sets the digital pin 13 as output
+#ifdef USE_BOARD_POWER
+	pinMode(RADIO_POWER_PIN, OUTPUT);  // sets the digital pin 13 as output
+	pinMode(SENSOR_POWER_PIN, OUTPUT); // sets the digital pin 13 as output
+#endif
 
 	// print example's introductory prompt
 	Debug(F("Sensor "));
 	Debugln(NODE_ID);
+
+	Wire.begin();
+	mySensor.setWire(&Wire);
 
 #ifdef WDT_ENABLED
 	wdt_enable(WDTO_8S);
 #endif
 } // setup
 
+bool Read_AM2320(int &error_code)
+{
+	int sensorReady = 1;
+	for (int si = 0; si < 10; si++)
+	{
+		if (!AM2320.begin())
+		{
+			Debugln(F("AM2320 is not responding!!"));
+			sensorReady = 0;
+			payload.temp = NAN;
+			error_code = ERR_SENSOR;
+			led.flash(error_code);
+			delay(500);
+#ifdef WDT_ENABLED
+			wdt_reset();
+#endif
+		}
+		else
+		{
+			AM2320.wakeUp();
+			delay(100);
+			payload.humidity = AM2320.getHumidity();
+			payload.temp = AM2320.getTemperature();
+			// payload.voltage = analogRead(A1);
+			Debug("Temp: ");
+			Debugln(payload.temp);
+			Debug("Hum: ");
+			Debugln(payload.humidity);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool Read_AM2320_2(int &error_code)
+{
+	int sensorReady = 1;
+	for (int si = 0; si < 10; si++)
+	{
+		if (mySensor.update() != 0)
+		{
+			Debugln(F("AM2320 is not responding!!"));
+			sensorReady = 0;
+			payload.temp = NAN;
+			error_code = ERR_SENSOR;
+			led.flash(error_code);
+			delay(500);
+#ifdef WDT_ENABLED
+			wdt_reset();
+#endif
+		}
+		else
+		{
+			payload.humidity = mySensor.humidity;
+			payload.temp = mySensor.temperatureC;
+			// payload.voltage = analogRead(A1);
+			Debug("Temp: ");
+			Debugln(payload.temp);
+			Debug("Hum: ");
+			Debugln(payload.humidity);
+			return true;
+		}
+	}
+	return false;
+}
+
 void loop()
 {
+
+#ifdef WDT_ENABLED
+	wdt_enable(WDTO_8S);
+#endif
 	int error_code = ERR_SUCCESS;
 	wdt_reset();
 	Debug(F("Reading voltage "));
 	payload.voltage = Vcc::measure();
 	Debugln(payload.voltage);
 
-	//digitalWrite(RADIO_POWER_PIN, HIGH); // sets the digital pin 13 on
-	//digitalWrite(SENSOR_POWER_PIN, HIGH); // sets the digital pin 13 on
-	// for (int il = 0; il < 20;il++)
-	delay(2000);
+#ifdef USE_BOARD_POWER
+	digitalWrite(RADIO_POWER_PIN, HIGH); // sets the digital pin 13 on
+#endif
 
 	bool radioAvail = false;
 	for (int rRetries = 0; rRetries < 10; rRetries++)
@@ -109,7 +187,9 @@ void loop()
 		error_code = ERR_RADIO;
 		led.flash(error_code);
 		delay(1000);
+#ifdef WDT_ENABLED
 		wdt_reset();
+#endif
 	}
 	if (radioAvail)
 	{
@@ -118,36 +198,16 @@ void loop()
 		radio.powerUp();
 
 		payload.nodeID = NODE_ID;
+#ifdef USE_BOARD_POWER
+		digitalWrite(SENSOR_POWER_PIN, HIGH); // sets the digital pin 13 on
+		delay(2000);
+#endif
 
 		Debugln(F("reading sensor"));
-		int sensorReady = 1;
-		for (int si = 0; si < 10; si++)
-		{
-			if (!AM2320.begin())
-			{
-				Debugln(F("sensor hardware is not responding!!"));
-				sensorReady = 0;
-				payload.temp = NAN;
-				error_code = ERR_SENSOR;
-				led.flash(error_code);
-				delay(500);
-				wdt_reset();
-			}
-			else
-			{
-				AM2320.wakeUp();
-				delay(2000);
-				payload.humidity = AM2320.getHumidity();
-				payload.temp = AM2320.getTemperature();
-				// payload.voltage = analogRead(A1);
-				Debug("Temp: ");
-				Debugln(payload.temp);
-				Debug("Hum: ");
-				Debugln(payload.humidity);
-				break;
-			}
-		}
+		Read_AM2320(error_code);
+#ifdef USE_BOARD_POWER
 		digitalWrite(SENSOR_POWER_PIN, LOW); // sets the digital pin 13 on
+#endif
 
 		Debugln("Configuring radio");
 		// role variable is hardcoded to RX behavior, inform the user of this
@@ -157,7 +217,7 @@ void loop()
 		//  Set the PA Level low to try preventing power supply related problems
 		//  because these examples are likely run with nodes in close proximity to
 		//  each other.
-		//radio.setPALevel(RF24_PA_MAX); // RF24_PA_MAX is default.
+		radio.setPALevel(RF24_PA_MAX); // RF24_PA_MAX is default.
 
 		// save on transmission time by setting the radio to only transmit the
 		// number of bytes we need to transmit a float
@@ -183,8 +243,8 @@ void loop()
 		long transTime = 0;
 		Debugln("Sending payload");
 
-		unsigned long start_timer = micros();       // start the timer
-		radio.writeBlocking(&payload, sizeof(payload), TX_TIMEOUT); // transmit & save the report
+		unsigned long start_timer = micros();		// start the timer
+		radio.writeFast(&payload, sizeof(payload)); // transmit & save the report
 		report = radio.txStandBy(TX_TIMEOUT);
 		Debugln("Payload size: ");
 		Debugln(sizeof(payload));
@@ -196,8 +256,9 @@ void loop()
 			delay(100);
 		}
 
-
+#ifdef WDT_ENABLED
 		wdt_reset();
+#endif
 
 		if (report)
 		{
@@ -220,12 +281,15 @@ void loop()
 
 		radio.powerDown();
 	}
-	//digitalWrite(RADIO_POWER_PIN, LOW); // sets the digital pin 13 on
+#ifdef USE_BOARD_POWER
+	digitalWrite(RADIO_POWER_PIN, LOW); // sets the digital pin 13 on
+#endif
 
+#ifdef WDT_ENABLED
 	wdt_reset();
-
 	// disable wdt while sleeping
 	wdt_disable();
+#endif
 
 	Debugln("Starting sleep");
 #ifdef DEBUG_MODE
@@ -243,7 +307,7 @@ void loop()
 	for (int il = 0; il < sleep_cycles; il++)
 	{
 		LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
-		if (il % 4 == 0) //every 32 seconds
+		if (il % 4 == 0) // every 32 seconds
 		{
 			if (lastErrorCodeCycles == 0)
 			{
