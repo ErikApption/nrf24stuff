@@ -39,7 +39,7 @@ int lastErrorCodeCycles = ERR_CODE_CYCLES;
 AM232X AM2320;
 
 // instantiate an object for the nRF24L01 transceiver
-RF24 radio(8, 9);                                    // using pin 7 for the CE pin, and pin 8 for the CSN pin
+RF24 radio(5, 6);                                    // using pin 5 for the CE pin, and pin 6 for the CSN pin
 EasyLed led(STATUS_LED, EasyLed::ActiveLevel::High); // Use this for an active-low LED.
 
 // Let these addresses be used for the pair
@@ -93,7 +93,7 @@ void loop()
 	Debugln(payload.voltage);
 
 	//digitalWrite(RADIO_POWER_PIN, HIGH); // sets the digital pin 13 on
-	digitalWrite(SENSOR_POWER_PIN, HIGH); // sets the digital pin 13 on
+	//digitalWrite(SENSOR_POWER_PIN, HIGH); // sets the digital pin 13 on
 	// for (int il = 0; il < 20;il++)
 	delay(2000);
 
@@ -157,7 +157,7 @@ void loop()
 		//  Set the PA Level low to try preventing power supply related problems
 		//  because these examples are likely run with nodes in close proximity to
 		//  each other.
-		radio.setPALevel(RF24_PA_MAX); // RF24_PA_MAX is default.
+		//radio.setPALevel(RF24_PA_MAX); // RF24_PA_MAX is default.
 
 		// save on transmission time by setting the radio to only transmit the
 		// number of bytes we need to transmit a float

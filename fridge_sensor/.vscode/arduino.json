@@ -2,6 +2,6 @@
     "output": "build",
     "board": "arduino:avr:pro",
     "port": "COM5",
-    "sketch": "pool_sensor.ino",
+    "sketch": "fridge_sensor.ino",
     "configuration": "cpu=8MHzatmega328"
 }
