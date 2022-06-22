@@ -46,7 +46,7 @@ voltage = 0.0
 # An address need to be a buffer protocol object (bytearray)
 node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node",b"7Node"]
 # node_roots =  ["hottub","weather","pool"]
-node_roots = ["pool", "weather", "hottub","garden","fridge"]
+node_roots = ["pool", "weather", "hottub","garden","fridge","watersensor"]
 
 def interrupt_handler(channel):
     """This function is called when IRQ pin is detected active LOW"""
@@ -219,11 +219,11 @@ def process_payload2(pipe_number,buffer):
     elif payloadID == 4:
         # unsigned int lux; should be 4 bytes but is 2
         bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('i')
-        analogValue = struct.unpack("<i", buffer[bufStart:bufEnd])[0]
+        bufEnd = bufStart + struct.calcsize('h')
+        analogValue = struct.unpack("<h", buffer[bufStart:bufEnd])[0]
                             
         TryPublish(node_roots[nodeID] +
-                    "/Node{}/Analog".format(nodeID), analogValue, qos, retain)
+                    "/Arduino/Analog", analogValue, qos, retain)
 
         # float voltage;
         bufStart = bufEnd
@@ -236,8 +236,8 @@ def process_payload2(pipe_number,buffer):
         TryPublish(node_roots[nodeID] +
                     "/Arduino/Voltage", voltage, qos, retain)
 
-        print("{} {} Data Lux:{} V:{}".format(
-            str(datetime.datetime.now()), pipe_number, luxValue,voltage))
+        print("{} {} Data Analog:{} V:{}".format(
+            str(datetime.datetime.now()), pipe_number, analogValue,voltage))
 
     else:
         print("invalid payload id:{}".format(payloadID))
