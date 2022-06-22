@@ -44,9 +44,9 @@ voltage = 0.0
 
 # For this example, we will use different addresses
 # An address need to be a buffer protocol object (bytearray)
-node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node"]
+node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node",b"7Node"]
 # node_roots =  ["hottub","weather","pool"]
-node_roots = ["pool", "weather", "hottub","garden"]
+node_roots = ["pool", "weather", "hottub","garden","fridge"]
 
 def interrupt_handler(channel):
     """This function is called when IRQ pin is detected active LOW"""
@@ -133,6 +133,11 @@ def process_payload2(pipe_number,buffer):
                         "/DHT/Temperature", temp, qos, retain)
             TryPublish(node_roots[nodeID] +
                         "/DHT/Humidity", humidity, qos, retain)
+        elif nodeID == 4:
+            TryPublish(node_roots[nodeID] +
+                        "/AM2320/Temperature", temp, qos, retain)
+            TryPublish(node_roots[nodeID] +
+                        "/AM2320/Humidity", humidity, qos, retain)
 
         print("{} {} Data T:{:0.2f} V:{} H:{}%".format(
             str(datetime.datetime.now()), pipe_number, temp, voltage, humidity))
@@ -196,6 +201,29 @@ def process_payload2(pipe_number,buffer):
                             
         TryPublish(node_roots[nodeID] +
                     "/TSL2261/LUX", luxValue, qos, retain)
+
+        # float voltage;
+        bufStart = bufEnd
+        bufEnd = bufStart + struct.calcsize('f')
+        voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        # convert mv to V
+        if voltage > 0:
+            voltage = voltage * 1.0 / 1000.0
+
+        TryPublish(node_roots[nodeID] +
+                    "/Arduino/Voltage", voltage, qos, retain)
+
+        print("{} {} Data Lux:{} V:{}".format(
+            str(datetime.datetime.now()), pipe_number, luxValue,voltage))
+
+    elif payloadID == 4:
+        # unsigned int lux; should be 4 bytes but is 2
+        bufStart = bufEnd
+        bufEnd = bufStart + struct.calcsize('i')
+        analogValue = struct.unpack("<i", buffer[bufStart:bufEnd])[0]
+                            
+        TryPublish(node_roots[nodeID] +
+                    "/Node{}/Analog".format(nodeID), analogValue, qos, retain)
 
         # float voltage;
         bufStart = bufEnd
@@ -308,7 +336,7 @@ if __name__ == "__main__":
 
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
-    #radio.setPALevel(RF24_PA_LOW)  # RF24_PA_MAX is default #RF24_PA_LOW
+    #radio.setPALevel(RF24_PA_MAX)  # RF24_PA_MAX is default #RF24_PA_LOW
     radio.setChannel(5)
 
     radio.setAutoAck(True)
