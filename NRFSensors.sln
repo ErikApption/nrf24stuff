@@ -9,6 +9,14 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SensorPayload", "SensorPayl
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "pool_sensor", "pool_sensor\pool_sensor.vcxproj", "{190F59FC-F3A2-469F-AD62-53C101E78185}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "weather_station_v2", "weather_station_v2\weather_station_v2.vcxproj", "{162A7899-3A96-4C3C-8E11-590280F2571C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "temp_sender2", "temp_sender2\temp_sender2.vcxproj", "{20809531-1D76-4A9D-B62A-D909D124E0F3}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "weatherstation_watchdog", "weatherstation_watchdog\weatherstation_watchdog.vcxproj", "{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fridge_sensor", "fridge_sensor\fridge_sensor.vcxproj", "{04D65CE4-C3F0-44EA-A8EB-8452C61116B2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -23,6 +31,22 @@ Global
 		{190F59FC-F3A2-469F-AD62-53C101E78185}.Debug|x86.Build.0 = Debug|Win32
 		{190F59FC-F3A2-469F-AD62-53C101E78185}.Release|x86.ActiveCfg = Release|Win32
 		{190F59FC-F3A2-469F-AD62-53C101E78185}.Release|x86.Build.0 = Release|Win32
+		{162A7899-3A96-4C3C-8E11-590280F2571C}.Debug|x86.ActiveCfg = Debug|Win32
+		{162A7899-3A96-4C3C-8E11-590280F2571C}.Debug|x86.Build.0 = Debug|Win32
+		{162A7899-3A96-4C3C-8E11-590280F2571C}.Release|x86.ActiveCfg = Release|Win32
+		{162A7899-3A96-4C3C-8E11-590280F2571C}.Release|x86.Build.0 = Release|Win32
+		{20809531-1D76-4A9D-B62A-D909D124E0F3}.Debug|x86.ActiveCfg = Debug|Win32
+		{20809531-1D76-4A9D-B62A-D909D124E0F3}.Debug|x86.Build.0 = Debug|Win32
+		{20809531-1D76-4A9D-B62A-D909D124E0F3}.Release|x86.ActiveCfg = Release|Win32
+		{20809531-1D76-4A9D-B62A-D909D124E0F3}.Release|x86.Build.0 = Release|Win32
+		{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}.Debug|x86.ActiveCfg = Debug|Win32
+		{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}.Debug|x86.Build.0 = Debug|Win32
+		{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}.Release|x86.ActiveCfg = Release|Win32
+		{C65A5CE0-1114-4F81-B14A-EB5A5CA78576}.Release|x86.Build.0 = Release|Win32
+		{04D65CE4-C3F0-44EA-A8EB-8452C61116B2}.Debug|x86.ActiveCfg = Debug|Win32
+		{04D65CE4-C3F0-44EA-A8EB-8452C61116B2}.Debug|x86.Build.0 = Debug|Win32
+		{04D65CE4-C3F0-44EA-A8EB-8452C61116B2}.Release|x86.ActiveCfg = Release|Win32
+		{04D65CE4-C3F0-44EA-A8EB-8452C61116B2}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
