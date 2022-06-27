@@ -2,7 +2,7 @@
 
 //#define DEBUG_MODE
 
-#define WDT_ENABLED
+//#define WDT_ENABLED
 
 #include <SPI.h>
 #include "printf.h"
@@ -13,7 +13,9 @@
 #include <payload.h>
 #include <debug_stuff.h>
 #include <Vcc.h>
-#include <avr/wdt.h>
+#ifdef WDT_ENABLED
+	#include <avr/wdt.h>
+#endif
 #include <EasyLed.h>
 
 #define ERR_RADIO 4
@@ -87,7 +89,9 @@ void setup()
 void loop()
 {
 	int error_code = ERR_SUCCESS;
+#ifdef WDT_ENABLED	
 	wdt_reset();
+#endif	
 	Debug(F("Reading voltage "));
 	payload.voltage = Vcc::measure();
 	Debugln(payload.voltage);
@@ -108,7 +112,9 @@ void loop()
 		error_code = ERR_RADIO;
 		led.flash(error_code);
 		delay(1000);
+#ifdef WDT_ENABLED	
 		wdt_reset();
+#endif		
 	}
 	if (radioAvail)
 	{
@@ -129,7 +135,9 @@ void loop()
 				payload.temp = NAN;
 				error_code = ERR_SENSOR;
 				led.flash(error_code);
+#ifdef WDT_ENABLED	
 				wdt_reset();
+#endif
 			}
 			else
 			{
@@ -181,7 +189,7 @@ void loop()
 		Debugln("Sending payload");
 
 		unsigned long start_timer = micros();       // start the timer
-		radio.writeFast(&payload, sizeof(payload)); // transmit & save the report
+		radio.writeBlocking(&payload, sizeof(payload),TX_TIMEOUT); // transmit & save the report
 		report = radio.txStandBy(TX_TIMEOUT);
 		Debugln("Payload size: ");
 		Debugln(sizeof(payload));
@@ -194,8 +202,9 @@ void loop()
 		}
 
 
+#ifdef WDT_ENABLED	
 		wdt_reset();
-
+#endif
 		if (report)
 		{
 			led.flash(ERR_SUCCESS);
@@ -219,10 +228,11 @@ void loop()
 	}
 	digitalWrite(POWER_PIN, LOW); // sets the digital pin 13 on
 
+#ifdef WDT_ENABLED	
 	wdt_reset();
-
 	// disable wdt while sleeping
 	wdt_disable();
+#endif
 
 	Debugln("Starting sleep");
 #ifdef DEBUG_MODE
