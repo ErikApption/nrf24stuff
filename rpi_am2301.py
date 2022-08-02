@@ -5,6 +5,7 @@
 from paho.mqtt.client import Client
 from ha_mqtt.mqtt_thermometer import MqttThermometer
 from ha_mqtt.mqtt_device_base import MqttDeviceSettings
+from ha_mqtt.ha_device import HaDevice
 
 import time
 import board
@@ -17,8 +18,9 @@ client.connect("openhab.local", 1883)
 client.loop_start()
 
 # instantiate an MQTTThermometer object
-settings = MqttDeviceSettings("Study AM2301", "StudyTemp",client)
-th = MqttThermometer(settings)
+dev = HaDevice("Study AM2301", "StudyAM2301")
+th = MqttThermometer(MqttDeviceSettings("Study AM2301", "StudyTemp",client,dev))
+hum = MqttThermometer(MqttDeviceSettings("Study AM2301", "StudyHumidity",client,dev),"%")
 #th = MqttThermometer("Study", "StudyTemp",client)
 
 # Initial the dht device, with data pin connected to:
@@ -38,6 +40,7 @@ for i in range(2):
         temp = f"{temperature_c:2.2f}"
         print(f"publishing temperature: {temp} {th.unit_of_measurement}")
         th.publish_state(temp)
+        hum.publish_state(humidity)
 
         print(
             "Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(
@@ -59,6 +62,7 @@ for i in range(2):
 
 time.sleep(2.0)
 th.close()
+hum.close()
 client.loop_stop()
 client.disconnect()
 print("closed connection")
