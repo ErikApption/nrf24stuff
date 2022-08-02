@@ -29,7 +29,7 @@ dhtDevice = adafruit_dht.DHT22(board.D17)
 # but it will not work in CircuitPython.
 # dhtDevice = adafruit_dht.DHT22(board.D18, use_pulseio=False)
 
-while True:
+for i in range(2):
     try:
         # Print the values to the serial port
         temperature_c = dhtDevice.temperature
@@ -44,6 +44,7 @@ while True:
                 temperature_f, temperature_c, humidity
             )
         )
+        break
 
     except RuntimeError as error:
         # Errors happen fairly often, DHT's are hard to read, just keep going
@@ -55,3 +56,9 @@ while True:
         raise error
 
     time.sleep(2.0)
+
+time.sleep(2.0)
+th.close()
+client.loop_stop()
+client.disconnect()
+print("closed connection")
