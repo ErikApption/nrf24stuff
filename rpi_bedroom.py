@@ -55,8 +55,8 @@ if __name__ == "__main__":
             % (sgp30.baseline_eCO2, sgp30.baseline_TVOC)
         )        
         if not dataError:
-            co2.publish_state(eCO2)
-            tvoc.publish_state(TVOC)
+            co2.publish_state(round(eCO2, 2))
+            tvoc.publish_state(round(TVOC, 2))
             client.publish("Bedroom/SGP30/CO2",eCO2)
             client.publish("Bedroom/SGP30/TVOC",TVOC)         
             print("published SGP30 data")
@@ -76,8 +76,8 @@ if __name__ == "__main__":
         dataError = bmp.temperature > 50 or bmp.pressure > 1100
         print("temp=",bmp.temperature," pressure",bmp.pressure," dataError=",dataError)
         if not dataError:
-            th.publish_state(bmp.temperature)
-            pres.publish_state(bmp.pressure)
+            th.publish_state(round(bmp.temperature, 2))
+            pres.publish_state(round(bmp.pressure, 4))
             client.publish("Bedroom/BME280/Temperature",bmp.temperature)
             client.publish("Bedroom/BME280/Pressure",bmp.pressure)            
             print("published BMP390 data")
