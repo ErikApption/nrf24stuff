@@ -56,7 +56,9 @@ if __name__ == "__main__":
         )        
         if not dataError:
             co2.publish_state(eCO2)
-            tvoc.publish_state(TVOC)            
+            tvoc.publish_state(TVOC)
+            client.publish("Bedroom/SGP30/CO2",eCO2)
+            client.publish("Bedroom/SGP30/TVOC",TVOC)         
             print("published SGP30 data")
 
     dataError = True
@@ -76,6 +78,8 @@ if __name__ == "__main__":
         if not dataError:
             th.publish_state(bmp.temperature)
             pres.publish_state(bmp.pressure)
+            client.publish("Bedroom/BME280/Temperature",bmp.temperature)
+            client.publish("Bedroom/BME280/Pressure",bmp.pressure)            
             print("published BMP390 data")
 
     print("stopping loop")
