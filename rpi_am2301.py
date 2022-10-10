@@ -10,17 +10,23 @@ from ha_mqtt.ha_device import HaDevice
 import time
 import board
 import adafruit_dht
-import ha_mqtt
+import datetime
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+
+def on_log(mqttc, obj, level, string):
+    print("[{}] {} - {}  - {}".format(datetime.datetime.now(),level,string,obj))
 
 # instantiate an paho mqtt client and connect to the mqtt server
 client = Client("StudyRPi")
 client.connect("openhab.local", 1883)
-client.loop_start()
-
+# client.loop_start()
+client.on_log = on_log
 # instantiate an MQTTThermometer object
 dev = HaDevice("Study AM2301", "StudyAM2301")
-th = MqttThermometer(MqttDeviceSettings("Study AM2301", "StudyTemp",client,dev))
-hum = MqttThermometer(MqttDeviceSettings("Study AM2301", "StudyHumidity",client,dev),"%")
+th = MqttThermometer(MqttDeviceSettings("Study AM2301 Temperature", "StudyTemp",client,dev),"°C")
+hum = MqttThermometer(MqttDeviceSettings("Study AM2301 Humidity", "StudyHumidity",client,dev),"%")
 #th = MqttThermometer("Study", "StudyTemp",client)
 
 # Initial the dht device, with data pin connected to:
@@ -30,39 +36,36 @@ dhtDevice = adafruit_dht.DHT22(board.D17)
 # This may be necessary on a Linux single board computer like the Raspberry Pi,
 # but it will not work in CircuitPython.
 # dhtDevice = adafruit_dht.DHT22(board.D18, use_pulseio=False)
-
-for i in range(2):
+success = False
+for i in range(10):
     try:
         # Print the values to the serial port
         temperature_c = dhtDevice.temperature
-        temperature_f = temperature_c * (9 / 5) + 32
         humidity = dhtDevice.humidity
         temp = f"{temperature_c:2.2f}"
-        print(f"publishing temperature: {temp} {th.unit_of_measurement}")
+        #print(f"publishing temperature: {temp} {th.unit_of_measurement}")
         th.publish_state(temp)
         hum.publish_state(humidity)
-
+        success = True
         print(
-            "Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(
-                temperature_f, temperature_c, humidity
-            )
+            "[{}] Published Temp: {}    Humidity: {}".format(datetime.datetime.now(),temp, humidity)
         )
+        time.sleep(2.0)
         break
 
     except RuntimeError as error:
         # Errors happen fairly often, DHT's are hard to read, just keep going
-        print(error.args[0])
+        print("RuntimeError: {}".format(error.args[0]))
         time.sleep(2.0)
         continue
     except Exception as error:
         dhtDevice.exit()
         raise error
 
-    time.sleep(2.0)
-
-time.sleep(2.0)
-th.close()
-hum.close()
+print("stopping loop")
 client.loop_stop()
+dhtDevice.exit()
+#th.close()
+#hum.close()
 client.disconnect()
 print("closed connection")
