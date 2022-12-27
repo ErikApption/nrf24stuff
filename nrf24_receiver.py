@@ -365,7 +365,7 @@ if __name__ == "__main__":
     radio.maskIRQ(True, False, False)  # args = tx_ds, tx_df, rx_dr
 
     # connect mqtt broker
-    client.connect("openhab.local", 1883, 60)
+    client.connect("10.0.0.37", 1883, 60)
 
     client.loop_start()
     print("connected to MQTT broker")
