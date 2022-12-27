@@ -9,7 +9,7 @@ import time
 import struct
 import datetime
 from paho.mqtt.client import Client
-#python3 -m pip install homeassistant-mqtt-binding
+#python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30
 from ha_mqtt.mqtt_thermometer import MqttThermometer
 from ha_mqtt.mqtt_sensor import MqttSensor
 from ha_mqtt.util import HaDeviceClass
@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     # instantiate an paho mqtt client and connect to the mqtt server
     client = Client("BedroomRPi")
-    client.connect("openhab.local", 1883)
+    client.connect("homeassistant.local", 1883)
     client.loop_start()
 
     # instantiate an MQTTThermometer object
