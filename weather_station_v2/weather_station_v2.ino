@@ -2,6 +2,7 @@
 
 //#define DEBUG_MODE
 #define WDT_ENABLED
+#define SI1145_ARDUINO
 //#define LED_DEBUG
 //#include <SPI.h>
 #include "printf.h"
@@ -15,7 +16,11 @@
 #include "SHT2x.h"
 #include <debug_stuff.h>
 #include <payload.h>
-#include "Adafruit_SI1145.h"
+#ifdef SI1145_ARDUINO
+#include <Adafruit_SI1145.h>
+#else
+#include <SI1145_WE.h>
+#endif
 #include <EasyLed.h>
 
 #ifdef __LGT8F__
@@ -47,7 +52,6 @@
 #define MAX_TEMP_RETRIES 2
 #define NODE_ID 1 //weather
 #define DHT_PIN 5
-#include <SI1145_WE.h>
 
 #define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
 #define SLEEP_CYCLES 10 //80 seconds otherwise
@@ -58,7 +62,7 @@ int lastErrorCode = ERR_SUCCESS;
 int lastErrorCodeCycles = ERR_CODE_CYCLES;
 
 //Adafruit_VEML6075 uv = Adafruit_VEML6075();
-SI1145_WE mySI1145 = SI1145_WE(&Wire);
+//SI1145_WE mySI1145 = SI1145_WE(&Wire);
 Adafruit_SI1145 uvs = Adafruit_SI1145();
 uint32_t delayMS;
 EasyLed led(STATUS_LED, EasyLed::ActiveLevel::High); // Use this for an active-low LED.
@@ -97,9 +101,9 @@ void setup() {
 
 #ifdef DEBUG_MODE
 	Serial.begin(115200);
-	while (!Serial) {`
+	while (!Serial) {
 		// some boards need to wait to ensure access to serial over USB
-}
+	}
 	Serial.println("Debug mode enabled");
 #endif
 
@@ -178,7 +182,8 @@ float readA0_Voltage_mV()
 
 #define SI1145_MEASUREMENTS 5
 
-bool readSI1145_2()
+#ifdef SI1145_ARDUINO
+bool readSI1145()
 {
 	unsigned long start_timer = micros();
 
@@ -201,6 +206,7 @@ bool readSI1145_2()
 	for (int i = 0; i < SI1145_MEASUREMENTS; i++) {
 		Debug("readout ");
 		Debugln(i);
+		keep_alive();
 		amb_als += (long)(uvs.readVisible());
 		amb_ir += (long)(uvs.readIR());
 		uv += (float)(uvs.readUV());
@@ -228,6 +234,7 @@ bool readSI1145_2()
 	return true;
 }
 
+#else
 bool readSI1145()
 {
 	unsigned long start_timer = micros();
@@ -301,6 +308,7 @@ bool readSI1145()
 		return true;
 	}
 }
+#endif
 
 void keep_alive()
 {
@@ -334,7 +342,7 @@ void loop() {
 	{
 		Debug("Reading SI1145 test");
 		Debugln(si);
-		si1145Available = readSI1145_2();
+		si1145Available = readSI1145();
 		if (si1145Available) break;
 		delay(100);
 	}

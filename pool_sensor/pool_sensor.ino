@@ -30,10 +30,10 @@
 #define MAX_RADIO_RETRIES 10
 #define NODE_ID 0 // pool
 
-#define TX_TIMEOUT 10000 // 10 seconds
+#define TX_TIMEOUT 4000 // 10 seconds
 
 #define SLEEP_CYCLES_SUCCESS 75 //10 minutes on success - 
-#define SLEEP_CYCLES_ERROR 10          // 80 seconds otherwise
+#define SLEEP_CYCLES_ERROR 1          // 8 seconds otherwise
 
 int lastErrorCode = ERR_SUCCESS;
 int lastErrorCodeCycles = ERR_CODE_CYCLES;
@@ -42,6 +42,7 @@ OneWire oneWire(ONE_WIRE_BUS);
 DS18B20 sensor(&oneWire);
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(6, 7);                                    // using pin 7 for the CE pin, and pin 8 for the CSN pin
+//RF24 radio(9, 10);                                    // on nano shield
 EasyLed led(STATUS_LED, EasyLed::ActiveLevel::High); // Use this for an active-low LED.
 
 // Let these addresses be used for the pair
@@ -86,6 +87,9 @@ void setup()
 #endif
 } // setup
 
+int transmitPower = RF24_PA_LOW;
+
+
 void loop()
 {
 	int error_code = ERR_SUCCESS;
@@ -98,7 +102,7 @@ void loop()
 
 	digitalWrite(POWER_PIN, HIGH); // sets the digital pin 13 on
 	// for (int il = 0; il < 20;il++)
-	delay(10);
+	delay(500);
 
 	bool radioAvail = false;
 	for (int rRetries = 0; rRetries < 10; rRetries++)
@@ -155,14 +159,18 @@ void loop()
 		}
 
 		Debugln("Configuring radio");
-		// role variable is hardcoded to RX behavior, inform the user of this
-		// Debugln(F("*** PRESS 'T' to begin transmitting to the other node"));
+
 		radio.setChannel(5);
 		// radio.setAutoAck(false); //https://github.com/nRF24/RF24/issues/685
 		//  Set the PA Level low to try preventing power supply related problems
 		//  because these examples are likely run with nodes in close proximity to
 		//  each other.
-		radio.setPALevel(RF24_PA_MAX); // RF24_PA_MAX is default.
+
+		#ifdef DEBUG_MODE
+			radio.setPALevel(RF24_PA_LOW, 0); // RF24_PA_MAX is default.
+		#else
+			radio.setPALevel(RF24_PA_MAX, 1); // RF24_PA_MAX is default.
+		#endif
 
 		// save on transmission time by setting the radio to only transmit the
 		// number of bytes we need to transmit a float
@@ -176,31 +184,34 @@ void loop()
 		radio.stopListening(); // put radio in TX mode
 
 		// from https://nrf24.github.io/RF24/examples_2MulticeiverDemo_2MulticeiverDemo_8ino-example.html
-		radio.setRetries(((NODE_ID * 3) % 12) + 3, 15); // maximum value is 15 for both args
+		radio.setRetries(10, 15); // maximum value is 15 for both args
 		// For debugging info
 		// printf_begin();             // needed only once for printing details
 		// radio.printDetails();       // (smaller) function that prints raw register values
 		// radio.printPrettyDetails(); // (larger) function that prints human readable data
+		radio.setAutoAck(true);
 
 		payload.payloadID = 0;
 
 		bool report = false;
+		//bool loaded = false;
 		long transTime = 0;
 		Debugln("Sending payload");
 
 		unsigned long start_timer = micros();       // start the timer
-		radio.writeBlocking(&payload, sizeof(payload),TX_TIMEOUT); // transmit & save the report
-		report = radio.txStandBy(TX_TIMEOUT);
+		//loaded = radio.writeBlocking(&payload, sizeof(payload),TX_TIMEOUT); // transmit & save the report
+		for (int transRetries = 0; transRetries < 10; transRetries++)
+		{ 
+			report = radio.write(&payload, sizeof(payload)); // transmit & save the report
+			delay(500);
+			if (report)
+				break;
+		}
+		//report = radio.txStandBy(TX_TIMEOUT,true) && loaded;		
 		Debugln("Payload size: ");
 		Debugln(sizeof(payload));
 		unsigned long end_timer = micros(); // end the timer
 		transTime = end_timer - start_timer;
-		if (!report)
-		{
-			Debugln("Transmission failed");
-			delay(100);
-		}
-
 
 #ifdef WDT_ENABLED	
 		wdt_reset();
@@ -217,6 +228,7 @@ void loop()
 		}
 		else
 		{
+			transmitPower = RF24_PA_HIGH;
 			error_code = ERR_TRANS_FAILED;
 			led.flash(error_code);
 			Debugln(F("Transmission failed or timed out")); // payload was not delivered
