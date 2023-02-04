@@ -13,6 +13,7 @@
 #include <Wire.h>
 //#include <Adafruit_Sensor.h>
 #include <avr/wdt.h>
+#include <utility/twi.h>
 #include "SHT2x.h"
 #include <debug_stuff.h>
 #include <payload.h>
@@ -39,6 +40,7 @@
 #define ERR_TEMP_SENSOR 3
 #define ERR_VIS_SENSOR 2
 #define ERR_TRANS_FAILED 5
+#define ERR_RETRIES_SENSOR 6
 #define ERR_SUCCESS 1
 #define ERR_CODE_CYCLES 80 // flash every 80 seconds * 80 = 6400 ~ 2 hours
 
@@ -49,7 +51,7 @@
 
 #define VCC_PIN A1
 #define MAX_RADIO_RETRIES 10
-#define MAX_TEMP_RETRIES 2
+#define MAX_TEMP_RETRIES 4
 #define NODE_ID 1 //weather
 #define DHT_PIN 5
 
@@ -94,7 +96,6 @@ void setup() {
 
 	pinMode(KEEPALIVE_PIN, OUTPUT);
 	keep_alive();
-
 #ifdef WDT_ENABLED
 	wdt_enable(WDTO_8S);
 #endif
@@ -120,13 +121,13 @@ void setup() {
 
 } // setup
 
-double prevTemp = 0;
-
+const float TEMP_ERROR_TH = 20;
 //float SI7021_temperature = NAN;
 //float SI7021_humidity = NAN;
-bool readTemp(void)
+bool readTemp(int *retries)
 {
 	unsigned long start_timer = micros();
+	Wire.setWireTimeout(25000ul,true);
 	sht.begin(&Wire);
 
 	payload.humidity = NAN;
@@ -135,27 +136,24 @@ bool readTemp(void)
 	bool success = false;
 	if (sht.isConnected())
 	{
-		int retries = 0;
-		for (retries; retries < MAX_TEMP_RETRIES; retries++)
+		sht.read();
+		payload.temp = sht.getTemperature();
+		float prevTemp = payload.temp - TEMP_ERROR_TH - 1;
+		while (abs(prevTemp - payload.temp) > TEMP_ERROR_TH && (*retries) < MAX_TEMP_RETRIES)
 		{
-
 			sht.read();
+			prevTemp = payload.temp;
 			payload.temp = sht.getTemperature();
 			payload.humidity = sht.getHumidity();
 			Debug("Temp: ");
 			Debugln(payload.temp);
 			Debug("Hum: ");
 			Debugln(payload.humidity);
-			int isValid = abs(payload.temp - prevTemp) <= 20;
-			prevTemp = payload.temp;
-			if (payload.temp != NAN && isValid)
-			{
-				success = true;
-				break;
-			}
 			Debug("Retries: ");
-			Debug(retries);
+			Debug(*retries);
+			(*retries)++;
 		}
+		success = (*retries) < MAX_TEMP_RETRIES;
 	}
 	else
 	{
@@ -186,7 +184,7 @@ float readA0_Voltage_mV()
 bool readSI1145()
 {
 	unsigned long start_timer = micros();
-
+	Wire.setWireTimeout(25000ul,true);
 	if (!uvs.begin(&Wire))
 	{
 		return false;
@@ -355,10 +353,13 @@ void loop() {
 	keep_alive();
 
 	Debugln("Reading temp");
-
-	if (!readTemp())
+	int retries = 0;
+	if (!readTemp(&retries))
 	{
-		error_code = ERR_TEMP_SENSOR;
+		if (retries > 0)
+			error_code = ERR_RETRIES_SENSOR;
+		else
+			error_code = ERR_TEMP_SENSOR;
 		led.flash(error_code);
 	}
 

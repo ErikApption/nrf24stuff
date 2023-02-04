@@ -15,12 +15,12 @@
             ],
             "intelliSenseMode": "gcc-x64",
             "includePath": [
-                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.5\\cores\\arduino",
-                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.5\\variants\\eightanaloginputs",
+                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.6\\cores\\arduino",
+                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.6\\variants\\eightanaloginputs",
                 "C:\\Users\\erik\\OneDrive - Apption\\Documents\\Arduino\\libraries\\RF24",
-                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.5\\libraries\\SPI\\src",
+                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.6\\libraries\\SPI\\src",
                 "C:\\Users\\erik\\OneDrive - Apption\\Documents\\Arduino\\libraries\\Vcc\\src",
-                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.5\\libraries\\Wire\\src",
+                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.6\\libraries\\Wire\\src",
                 "C:\\Users\\erik\\OneDrive - Apption\\Documents\\Arduino\\libraries\\SHT2x",
                 "C:\\Users\\erik\\OneDrive - Apption\\Documents\\Arduino\\libraries\\nrfdata",
                 "C:\\Users\\erik\\OneDrive - Apption\\Documents\\Arduino\\libraries\\Adafruit_SI1145_Library",
@@ -32,7 +32,7 @@
                 "c:\\users\\erik\\appdata\\local\\arduino15\\packages\\arduino\\tools\\avr-gcc\\7.3.0-atmel3.6.1-arduino7\\avr\\include"
             ],
             "forcedInclude": [
-                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.5\\cores\\arduino\\Arduino.h"
+                "C:\\Users\\erik\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.6\\cores\\arduino\\Arduino.h"
             ],
             "cStandard": "c11",
             "cppStandard": "c++11",
