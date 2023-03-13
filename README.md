@@ -1,4 +1,10 @@
-# nrf24stuff
+# Installation Instructions
+
+## Linux configuration
+
+- [Github CLI](https://github.com/cli/cli/blob/trunk/docs/install_linux.md)
+- Avahi-etc: `sudo apt-get install avahi-daemon libnss-mdns libnss-mymachines`
+- GPIO: `sudo usermod -a -G gpio $USER` or `sudo usermod -a -G dialout $USER`
 
 ## NRF24 Receiver
 
