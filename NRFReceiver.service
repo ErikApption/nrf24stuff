@@ -3,9 +3,9 @@ Description=NRF24L01 Receiver
 
 [Service]
 # will set the Current Working Directory (CWD)
-WorkingDirectory=/home/pi/
+WorkingDirectory=/home/weather/
 # systemd will run this executable to start the service
-ExecStart=python3 /home/pi/nrf24stuff/nrf24_receiver.py 
+ExecStart=python3 /home/weather/nrf24stuff/nrf24_receiver.py 
 # to query logs using journalctl, set a logical name here  
 SyslogIdentifier=NRFReceiver
 
@@ -13,7 +13,7 @@ SyslogIdentifier=NRFReceiver
 # If you pick a different user, make sure dotnet and all permissions are set correctly to run the app.
 # To update permissions, use 'chown yourusername -R /srv/SiriusXM' to take ownership of the folder and files,
 #       Use 'chmod +x /srv/SiriusXM/SiriusXM' to allow execution of the executable file.
-User=pi
+User=weather
 
 # ensure the service restarts after crashing
 Restart=always

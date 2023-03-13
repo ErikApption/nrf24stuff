@@ -9,7 +9,7 @@ import time
 import struct
 import datetime
 import numpy as np
-from RF24 import RF24, RF24_PA_LOW
+from pyrf24 import RF24, RF24_PA_LOW
 import paho.mqtt.client as paho
 import os.path
 import RPi.GPIO as GPIO
