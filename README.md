@@ -18,7 +18,6 @@
 - Install nrf24 library `python3 -m pip install pyrf24`
 ### Python Dependencies
 
-`sudo pip3 install numpy`
 `pip3 install paho.mqtt numpy`
 `sudo apt install python3-rpi.gpio`
 

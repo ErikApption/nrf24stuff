@@ -267,7 +267,8 @@ def listen(timeout=1198): #//20 minutes restart
     :param int timeout: The number of seconds to wait (with no transmission)
         until exiting function.
     """
-    print("waiting for signal... radio payload:{}".format(radio.payloadSize))
+    #print("{} {} Data Lux:{} V:{}".format(str(datetime.datetime.now()), pipe_number, luxValue,voltage))
+    print("{} - waiting for signal... radio payload:{}".format(str(datetime.datetime.now()), radio.payloadSize))
     radio.startListening()  # put radio in RX mode
 
     start_timer = time.monotonic()
@@ -326,7 +327,8 @@ if __name__ == "__main__":
         raise RuntimeError("radio hardware is not responding")
 
     receiver_address = b"1Node"
-    print("Receiver address is {}".format(receiver_address.hex()))
+    #print("{} {} Data Lux:{} V:{}".format(str(datetime.datetime.now()), pipe_number, luxValue,voltage))
+    print("{} Receiver address is {}".format(str(datetime.datetime.now()),receiver_address.hex()))
     # It is very helpful to think of an address as a path instead of as
     # an identifying device destination
 
