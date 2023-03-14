@@ -24,3 +24,7 @@
 ## Bedroom Receiver
 
 `python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30`
+
+## Study AM2301
+
+`python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30 adafruit-circuitpython-dht`
