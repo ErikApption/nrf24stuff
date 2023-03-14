@@ -21,3 +21,6 @@
 `pip3 install paho.mqtt numpy`
 `sudo apt install python3-rpi.gpio`
 
+## Bedroom Receiver
+
+`python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30`
