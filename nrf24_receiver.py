@@ -14,6 +14,9 @@ import paho.mqtt.client as paho
 import os.path
 import RPi.GPIO as GPIO
 import threading
+import socket
+
+hostname = socket.gethostname()
 
 ########### USER CONFIGURATION ###########
 # See https:#github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
@@ -87,6 +90,7 @@ def process_payload2(pipe_number,buffer):
     # client.connect("openhab.local", 1883, 60)
 
     # client.loop_start()
+    TryPublish(hostname + "/NRF24/Error", "0", 2, True)
 
     qos = 2
     retain = True
@@ -324,6 +328,7 @@ if __name__ == "__main__":
     # client.on_publish = on_publish
     # initialize the nRF24L01 on the spi bus
     if not radio.begin():
+        TryPublish(hostname + "/NRF24/Error", "1", 2, True)
         raise RuntimeError("radio hardware is not responding")
 
     receiver_address = b"1Node"
