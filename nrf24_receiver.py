@@ -17,7 +17,7 @@ import threading
 import socket
 
 hostname = socket.gethostname()
-
+print(f"hostname is {hostname}")
 ########### USER CONFIGURATION ###########
 # See https:#github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
 # Radio CE Pin, CSN Pin, SPI Speed
