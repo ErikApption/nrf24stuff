@@ -137,3 +137,6 @@ dmypy.json
 /weather_station_v2/__vm
 /temp_sender2/__vm
 /fridge_sensor/Release
+
+# Venv
+opi_sensors/*

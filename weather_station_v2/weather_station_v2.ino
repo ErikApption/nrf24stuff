@@ -7,14 +7,14 @@
 //#include <SPI.h>
 #include "printf.h"
 #include "RF24.h"
-
+#include "SHT85.h"
 //#include <LowPower.h>
 #include <Vcc.h>
 #include <Wire.h>
 //#include <Adafruit_Sensor.h>
 #include <avr/wdt.h>
 #include <utility/twi.h>
-#include "SHT2x.h"
+
 #include <debug_stuff.h>
 #include <payload.h>
 #ifdef SI1145_ARDUINO
@@ -68,7 +68,7 @@ int lastErrorCodeCycles = ERR_CODE_CYCLES;
 Adafruit_SI1145 uvs = Adafruit_SI1145();
 uint32_t delayMS;
 EasyLed led(STATUS_LED, EasyLed::ActiveLevel::High); // Use this for an active-low LED.
-SHT2x sht;
+SHT85 sht;
 
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(6, 7); // using pin 6 for the CE pin, and pin 7 for the CSN pin - weather station setup

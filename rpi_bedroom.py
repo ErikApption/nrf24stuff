@@ -9,12 +9,13 @@ import time
 import struct
 import datetime
 from paho.mqtt.client import Client
-#python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30
+#python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30 gpiod
 from ha_mqtt.mqtt_thermometer import MqttThermometer
 from ha_mqtt.mqtt_sensor import MqttSensor
 from ha_mqtt.util import HaDeviceClass
 from ha_mqtt.mqtt_device_base import MqttDeviceSettings
 from ha_mqtt.ha_device import HaDevice
+from adafruit_blinka.microcontroller.generic_linux.libgpiod_pin import Pin
 import os.path
 
 import board
@@ -40,6 +41,8 @@ if __name__ == "__main__":
     co2 = MqttSensor(MqttDeviceSettings("Bedroom SGP30", "Bedroom_eCO2",client,dev2),"ppm",HaDeviceClass.PM10)
     tvoc = MqttSensor(MqttDeviceSettings("Bedroom SGP30", "Bedroom_TVOC",client,dev2),"ppb",HaDeviceClass.PM10)    
     #th = MqttThermometer("Bedroom", "BedroomTemp",client)    
+    # good for RPI
+    #i2c = board.I2C()
     i2c = board.I2C()
     sgp30 = adafruit_sgp30.Adafruit_SGP30(i2c)    
 
