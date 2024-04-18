@@ -17,7 +17,8 @@ import threading
 import socket
 
 hostname = socket.gethostname()
-print(f"hostname is {hostname}")
+radio_status = f"{hostname}/NRF24/Status"
+
 ########### USER CONFIGURATION ###########
 # See https:#github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
 # Radio CE Pin, CSN Pin, SPI Speed
@@ -90,7 +91,8 @@ def process_payload2(pipe_number,buffer):
     # client.connect("openhab.local", 1883, 60)
 
     # client.loop_start()
-    TryPublish(hostname + "/NRF24/Error", "OFF", 2, True)
+
+    TryPublish(radio_status, "ON", 2, True)
 
     qos = 2
     retain = True
@@ -328,7 +330,7 @@ if __name__ == "__main__":
     # client.on_publish = on_publish
     # initialize the nRF24L01 on the spi bus
     if not radio.begin():
-        TryPublish(hostname + "/NRF24/Error", "ON", 2, True)
+        TryPublish(radio_status, "OFF", 2, True)
         raise RuntimeError("radio hardware is not responding")
 
     receiver_address = b"1Node"
@@ -378,6 +380,8 @@ if __name__ == "__main__":
     print("connected to MQTT broker")
 
     try:
+        print(f"hostname is {hostname}")        
+        TryPublish(radio_status, "ON", 2, True)
         listen()
         client.loop_stop()
     except KeyboardInterrupt:
