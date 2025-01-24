@@ -12,7 +12,10 @@ import numpy as np
 from pyrf24 import RF24, RF24_PA_LOW
 import paho.mqtt.client as paho
 import os.path
+#on orange pi
 import OPi.GPIO as GPIO
+#on raspberry pi
+#import RPi.GPIO as GPIO
 import threading
 import socket
 
@@ -30,7 +33,7 @@ radio_status = f"{hostname}/NRF24/Status"
 # Generic:
 radio = RF24(22, 0)
 
-IRQ_PIN = 27
+IRQ_PIN = 7
 
 ################## Linux (BBB,x86,etc) #########################
 # See http:#nRF24.github.io/RF24/pages.html for more information on usage
