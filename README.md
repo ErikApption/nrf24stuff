@@ -1,5 +1,18 @@
 # nrf24stuff
 
+## Create virtual environment
+
+```bash
+python -m venv venv
+```
+
+## Setup packages
+
+```bash
+. venv/bin/activate
+pip install -r requirements.txt
+```
+
 ## Linux configuration
 
 - [Github CLI](https://github.com/cli/cli/blob/trunk/docs/install_linux.md)
