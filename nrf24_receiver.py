@@ -60,14 +60,15 @@ def interrupt_handler(channel):
         radio.flush_tx()
     print("Interrupt - tx_ds: {}, tx_df: {}, rx_dr: {}".format(tx_ds, tx_df, rx_dr))
     if rx_dr:
-        process_payload()
+        # process payload and check
+        process_payload(True)
 
 # setup IRQ GPIO pin
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(IRQ_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.add_event_detect(IRQ_PIN, GPIO.FALLING, callback=interrupt_handler)
 
-def process_payload():
+def process_payload(check_payload):
     has_payload, pipe_number = radio.available_pipe()
     if has_payload:        
         payloadLen = radio.getDynamicPayloadSize()
@@ -79,7 +80,8 @@ def process_payload():
         t = threading.Thread(target=process_payload2,args=(pipe_number,buffer))
         t.start()
     else:
-        print("weird - IRQ triggered but no payload ???!!!")
+        if check_payload:
+            print("weird - IRQ triggered but no payload ???!!!")
 
 def process_payload2(pipe_number,buffer):
     # use struct.unpack() to convert the buffer into usable data
@@ -280,9 +282,8 @@ def listen(timeout=1198): #//20 minutes restart
     start_timer = time.monotonic()
     while (time.monotonic() - start_timer) < timeout:
         time.sleep(10)
-        #has_payload, pipe_number = radio.available_pipe()
-        #if has_payload:        
-        #   process_payload(pipe_number):
+        # process payload but do not check
+        process_payload(False)
     print("{} - No data received - Leaving RX role...".format(str(datetime.datetime.now())))
     # recommended behavior is to keep in TX mode while idle
     radio.stopListening()  # put the radio in TX mode
@@ -327,6 +328,13 @@ def TryPublish(topic, payload=None, qos=0, retain=False):
 if __name__ == "__main__":
 
     client = paho.Client()
+
+    # connect mqtt broker
+    client.connect("homeassistant.local", 1883, 60)
+
+    client.loop_start()
+    print("connected to MQTT broker")
+
     # client.on_publish = on_publish
     # initialize the nRF24L01 on the spi bus
     if not radio.begin():
@@ -372,12 +380,6 @@ if __name__ == "__main__":
     # on data ready test
     #Configuring IRQ pin to only ignore 'on data sent' event
     radio.maskIRQ(True, False, False)  # args = tx_ds, tx_df, rx_dr
-
-    # connect mqtt broker
-    client.connect("homeassistant.local", 1883, 60)
-
-    client.loop_start()
-    print("connected to MQTT broker")
 
     try:
         print(f"hostname is {hostname}")        
