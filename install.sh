@@ -1,4 +1,4 @@
-#!/bin/sh
-path=`pwd`
-sudo ln -s $path/NRFReceiver.service /etc/systemd/system
-sudo systemctl daemon-reload
+#!/bin/bash
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt

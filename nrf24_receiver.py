@@ -13,13 +13,13 @@ from pyrf24 import RF24, RF24_PA_LOW, RF24_DRIVER, RF24_PA_MAX
 import paho.mqtt.client as paho
 import os.path
 #on orange pi
-import OPi.GPIO as GPIO
+#import OPi.GPIO as GPIO
 #on raspberry pi
 #import RPi.GPIO as GPIO
 import threading
 import socket
-import gpiod
-from gpiod.line import Edge
+#import gpiod
+#from gpiod.line import Edge
 
 hostname = socket.gethostname()
 radio_status = f"{hostname}/NRF24/Status"
@@ -36,8 +36,11 @@ radio_status = f"{hostname}/NRF24/Status"
 #RPI
 #radio = RF24(22, 0)
 
-#opi
-radio = RF24(22, 0)
+#https://wiki.t-firefly.com/en/ROC-RK3588S-PC/usage_gpio.html
+#opi GPIO1_A2 - bank = 1 group = 0 X =2
+#number = group * 8 + X = 0*8+2 = 2
+#pin = bank * 32 + number = 0*32+2 = 34
+radio = RF24(15,0)
 
 ################## Linux (BBB,x86,etc) #########################
 # See http:#nRF24.github.io/RF24/pages.html for more information on usage
@@ -357,7 +360,7 @@ if __name__ == "__main__":
 
     receiver_address = b"1Node"
     #print("{} {} Data Lux:{} V:{}".format(str(datetime.datetime.now()), pipe_number, luxValue,voltage))
-    print(f"{str(datetime.datetime.now())} - Receiver address is {receiver_address.hex()} - driver is {RF24_DRIVER}")
+    print(f"{str(datetime.datetime.now())} - Receiver address is {receiver_address.hex()} - driver is {RF24_DRIVER} - radio connected: {radio.isChipConnected()}")
     # It is very helpful to think of an address as a path instead of as
     # an identifying device destination
 
@@ -367,7 +370,7 @@ if __name__ == "__main__":
 
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
-    radio.set_pa_level(RF24_PA_LOW, True)  # RF24_PA_MAX is default #RF24_PA_LOW
+    radio.set_pa_level(RF24_PA_LOW, False)  # RF24_PA_MAX is default #RF24_PA_LOW
     radio.channel = 5
 
     #radio.setAutoAck(True)
@@ -394,6 +397,7 @@ if __name__ == "__main__":
     # on data ready test
     #Configuring IRQ pin to only ignore 'on data sent' event
     #radio.maskIRQ(True, False, False)  # args = tx_ds, tx_df, rx_dr
+    radio.print_pretty_details()
 
     try:
         print(f"hostname is {hostname}")        
