@@ -40,7 +40,7 @@ radio_status = f"{hostname}/NRF24/Status"
 #opi GPIO1_A2 - bank = 1 group = 0 X =2
 #number = group * 8 + X = 0*8+2 = 2
 #pin = bank * 32 + number = 0*32+2 = 34
-radio = RF24(15,0)
+radio = RF24(22,0)
 
 ################## Linux (BBB,x86,etc) #########################
 # See http:#nRF24.github.io/RF24/pages.html for more information on usage
