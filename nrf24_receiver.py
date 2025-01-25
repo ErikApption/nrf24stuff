@@ -111,6 +111,8 @@ def process_payload2(pipe_number,buffer):
     bufStart = bufEnd
     bufEnd = bufStart + struct.calcsize('b')
     payloadID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
+    if nodeID >= len(node_roots):
+        raise RuntimeError(f"Invalid node id received: {nodeID} - payload: {payloadID}")
     if (payloadID == 0):
         # float temp;
         bufStart = bufEnd
