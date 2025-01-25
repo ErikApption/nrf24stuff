@@ -34,12 +34,11 @@ radio_status = f"{hostname}/NRF24/Status"
 
 # Generic:
 #RPI
-#radio = RF24(22, 0)
-#IRQ_PIN = 27
+radio = RF24(22, 0)
+
 
 #opi
-radio = RF24(15, 0)
-IRQ_PIN = 7
+#radio = RF24(15, 0)
 
 ################## Linux (BBB,x86,etc) #########################
 # See http:#nRF24.github.io/RF24/pages.html for more information on usage
