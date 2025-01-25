@@ -373,7 +373,7 @@ if __name__ == "__main__":
 
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
-    radio.set_pa_level(RF24_PA_LOW, False)  # RF24_PA_MAX is default #RF24_PA_LOW
+    radio.set_pa_level(RF24_PA_LOW, True)  # RF24_PA_MAX is default #RF24_PA_LOW
     radio.channel = 5
 
     #radio.setAutoAck(True)
