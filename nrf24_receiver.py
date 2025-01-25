@@ -13,7 +13,7 @@ from pyrf24 import RF24, RF24_PA_LOW
 import paho.mqtt.client as paho
 import os.path
 #on orange pi
-import OPi.GPIO as GPIO
+#import OPi.GPIO as GPIO
 #on raspberry pi
 #import RPi.GPIO as GPIO
 import threading
