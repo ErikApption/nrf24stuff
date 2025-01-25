@@ -87,8 +87,9 @@ def process_payload(check_payload):
         print("payload received... pipe:{} buffer:{} radio payload:{}".format(
             pipe_number, len(buffer), payloadLen))
 
-        t = threading.Thread(target=process_payload2,args=(pipe_number,buffer))
-        t.start()
+        #t = threading.Thread(target=process_payload2,args=(pipe_number,buffer))
+        #t.start()
+        process_payload2(pipe_number,buffer)
         return True
     else:
         if check_payload:
