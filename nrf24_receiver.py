@@ -9,7 +9,7 @@ import time
 import struct
 import datetime
 import numpy as np
-from pyrf24 import RF24, RF24_PA_LOW
+from pyrf24 import RF24, RF24_PA_LOW, RF24_DRIVER, RF24_PA_MAX
 import paho.mqtt.client as paho
 import os.path
 #on orange pi
@@ -18,6 +18,8 @@ import OPi.GPIO as GPIO
 #import RPi.GPIO as GPIO
 import threading
 import socket
+import gpiod
+from gpiod.line import Edge
 
 hostname = socket.gethostname()
 radio_status = f"{hostname}/NRF24/Status"
@@ -31,8 +33,12 @@ radio_status = f"{hostname}/NRF24/Status"
 # ie: RF24 radio(<ce_pin>, <a>*10+<b>); spidev1.0 is 10, spidev1.1 is 11 etc..
 
 # Generic:
-radio = RF24(22, 0)
+#RPI
+#radio = RF24(22, 0)
+#IRQ_PIN = 27
 
+#opi
+radio = RF24(15, 0)
 IRQ_PIN = 7
 
 ################## Linux (BBB,x86,etc) #########################
@@ -55,7 +61,7 @@ node_addresses = [b"2Node", b"3Node", b"4Node", b"5Node", b"6Node",b"7Node"]
 # node_roots =  ["hottub","weather","pool"]
 node_roots = ["pool", "weather", "hottub","garden","fridge","watersensor"]
 
-def interrupt_handler(channel):
+def interrupt_handler():
     """This function is called when IRQ pin is detected active LOW"""
     #print("IRQ pin", channel, "went active LOW.")
     tx_ds, tx_df, rx_dr = radio.whatHappened()   # get IRQ status flags
@@ -67,9 +73,10 @@ def interrupt_handler(channel):
         process_payload(True)
 
 # setup IRQ GPIO pin
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(IRQ_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.add_event_detect(IRQ_PIN, GPIO.FALLING, callback=interrupt_handler)
+# The GPIO.BOARD option specifies that you are referring to the pins by the number of the pin on the plug 
+# GPIO.setmode(GPIO.BOARD)
+# GPIO.setup(IRQ_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# GPIO.add_event_detect(IRQ_PIN, GPIO.FALLING, callback=interrupt_handler)
 
 def process_payload(check_payload):
     has_payload, pipe_number = radio.available_pipe()
@@ -82,9 +89,11 @@ def process_payload(check_payload):
 
         t = threading.Thread(target=process_payload2,args=(pipe_number,buffer))
         t.start()
+        return True
     else:
         if check_payload:
             print("weird - IRQ triggered but no payload ???!!!")
+        return False
 
 def process_payload2(pipe_number,buffer):
     # use struct.unpack() to convert the buffer into usable data
@@ -279,17 +288,20 @@ def listen(timeout=1198): #//20 minutes restart
         until exiting function.
     """
     #print("{} {} Data Lux:{} V:{}".format(str(datetime.datetime.now()), pipe_number, luxValue,voltage))
-    print("{} - waiting for signal... radio payload:{}".format(str(datetime.datetime.now()), radio.payloadSize))
-    radio.startListening()  # put radio in RX mode
+    print(f"{str(datetime.datetime.now())} - waiting for signal... radio payload:{radio.payloadSize}")
+    radio.listen = True  # put radio in RX mode
 
     start_timer = time.monotonic()
     while (time.monotonic() - start_timer) < timeout:
-        time.sleep(10)
         # process payload but do not check
-        process_payload(False)
-    print("{} - No data received - Leaving RX role...".format(str(datetime.datetime.now())))
+        if (process_payload(False)):
+            start_timer = time.monotonic()
+    time.sleep(0.5)
+    print(f"{str(datetime.datetime.now())} - No data received - Leaving RX role...")
     # recommended behavior is to keep in TX mode while idle
-    radio.stopListening()  # put the radio in TX mode
+    radio.listen = False
+    
+
 
 def calcLux(vis, ir):
   vis_dark = 256 # empirical value
@@ -330,7 +342,7 @@ def TryPublish(topic, payload=None, qos=0, retain=False):
 
 if __name__ == "__main__":
 
-    client = paho.Client()
+    client = paho.Client(paho.CallbackAPIVersion.VERSION2)
 
     # connect mqtt broker
     client.connect("homeassistant.local", 1883, 60)
@@ -346,7 +358,7 @@ if __name__ == "__main__":
 
     receiver_address = b"1Node"
     #print("{} {} Data Lux:{} V:{}".format(str(datetime.datetime.now()), pipe_number, luxValue,voltage))
-    print("{} Receiver address is {}".format(str(datetime.datetime.now()),receiver_address.hex()))
+    print(f"{str(datetime.datetime.now())} - Receiver address is {receiver_address.hex()} - driver is {RF24_DRIVER}")
     # It is very helpful to think of an address as a path instead of as
     # an identifying device destination
 
@@ -356,22 +368,22 @@ if __name__ == "__main__":
 
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
-    #radio.setPALevel(RF24_PA_MAX)  # RF24_PA_MAX is default #RF24_PA_LOW
-    radio.setChannel(5)
+    radio.set_pa_level(RF24_PA_LOW, False)  # RF24_PA_MAX is default #RF24_PA_LOW
+    radio.channel = 5
 
-    radio.setAutoAck(True)
+    #radio.setAutoAck(True)
     # set the TX address of the RX node into the TX pipe
-    radio.openWritingPipe(receiver_address)  # always uses pipe 0
+    radio.open_tx_pipe(receiver_address)  # always uses pipe 0
 
     # set the RX address of the TX node into a RX pipe
     # write the addresses to all pipes.
     for pipe_n, addr in enumerate(node_addresses):
-        radio.openReadingPipe(pipe_n, addr)
+        radio.open_rx_pipe(pipe_n, addr)
 
     # To save time during transmission, we'll set the payload size to be only
     # what we need. A float value occupies 4 bytes in memory using
     # struct.pack(); "<f" means a little endian unsigned float
-    radio.enableDynamicPayloads()
+    radio.dynamic_payloads = True
     # radio.payloadSize = (2*struct.calcsize('H')+2*struct.calcsize('f')+
     #                     struct.calcsize('f')+3*struct.calcsize('H')+struct.calcsize('f'))
     # for debugging, we have 2 options that print a large block of details
@@ -382,7 +394,7 @@ if __name__ == "__main__":
 
     # on data ready test
     #Configuring IRQ pin to only ignore 'on data sent' event
-    radio.maskIRQ(True, False, False)  # args = tx_ds, tx_df, rx_dr
+    #radio.maskIRQ(True, False, False)  # args = tx_ds, tx_df, rx_dr
 
     try:
         print(f"hostname is {hostname}")        

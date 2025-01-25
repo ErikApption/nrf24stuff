@@ -3,3 +3,4 @@ numpy
 pyrf24
 RPi.GPIO
 OPi.GPIO
+gpiod
