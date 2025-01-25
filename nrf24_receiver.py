@@ -120,6 +120,9 @@ def process_payload2(pipe_number,buffer):
     bufStart = bufEnd
     bufEnd = bufStart + struct.calcsize('b')
     nodeID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
+    if (nodeID < 0 or nodeID >= len(node_roots)):
+        print(f"ERROR - invalid node id received:{nodeID}")
+        return
 
     # unsigned long payloadID;
     bufStart = bufEnd
