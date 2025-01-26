@@ -16,7 +16,12 @@ import logging
 #from gpiod.line import Edge
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Check if running as a systemd service
+if 'INVOCATION_ID' in os.environ:
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+else:
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 
 hostname = socket.gethostname()
