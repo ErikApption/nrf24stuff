@@ -1,5 +1,6 @@
 paho.mqtt 
 numpy
 pyrf24
-RPi.GPIO
-OPi.GPIO
+#RPi.GPIO
+#OPi.GPIO
+#gpiod
