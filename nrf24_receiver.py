@@ -1,8 +1,3 @@
-#!/usr/bin/python3
-"""
-A simple example of sending data from 1 nRF24L01 transceiver to another.
-This example was written to be used on 2 devices acting as 'nodes'.
-"""
 import sys
 import argparse
 import time
@@ -32,8 +27,8 @@ config = configparser.ConfigParser()
 config_path = os.path.join(os.path.dirname(__file__), 'receiver.ini')
 config.read(config_path)
 
-ce_pin = config.getint('RF24', 'ce_pin')
-csn_pin = config.getint('RF24', 'csn_pin')
+ce_pin = config.getint('RF24', 'ce_pin', fallback=22)
+csn_pin = config.getint('RF24', 'csn_pin', fallback=0)
 
 ########### USER CONFIGURATION ###########
 # See https:#github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
@@ -54,7 +49,7 @@ csn_pin = config.getint('RF24', 'csn_pin')
 #GPIO4_A6 - bank = 4 group = 0 X =6
 #number = group * 8 + X = 0*8+6 = 6
 #pin = bank * 32 + number = 4*32+6 = 134
-radio = RF24(6,0)
+radio = RF24(ce_pin,csn_pin)
 
 ################## Linux (BBB,x86,etc) #########################
 # See http:#nRF24.github.io/RF24/pages.html for more information on usage
