@@ -18,11 +18,26 @@ import os.path
 #import RPi.GPIO as GPIO
 import threading
 import socket
+import configparser
+import os
+import logging
 #import gpiod
 #from gpiod.line import Edge
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
 hostname = socket.gethostname()
-radio_status = f"{hostname}/NRF24/Status"
+radio_status = f"weather-gtw/NRF24/Status"
+
+# Read configuration
+config = configparser.ConfigParser()
+config_path = os.path.join(os.path.dirname(__file__), 'receiver.ini')
+config.read(config_path)
+
+ce_pin = config.getint('RF24', 'ce_pin')
+csn_pin = config.getint('RF24', 'csn_pin')
 
 ########### USER CONFIGURATION ###########
 # See https:#github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
@@ -40,7 +55,10 @@ radio_status = f"{hostname}/NRF24/Status"
 #opi GPIO1_A2 - bank = 1 group = 0 X =2
 #number = group * 8 + X = 0*8+2 = 2
 #pin = bank * 32 + number = 0*32+2 = 34
-radio = RF24(22,0)
+#GPIO4_A6 - bank = 4 group = 0 X =6
+#number = group * 8 + X = 0*8+6 = 6
+#pin = bank * 32 + number = 4*32+6 = 134
+radio = RF24(6,0)
 
 ################## Linux (BBB,x86,etc) #########################
 # See http:#nRF24.github.io/RF24/pages.html for more information on usage
@@ -64,11 +82,11 @@ node_roots = ["pool", "weather", "hottub","garden","fridge","watersensor"]
 
 def interrupt_handler():
     """This function is called when IRQ pin is detected active LOW"""
-    #print("IRQ pin", channel, "went active LOW.")
+    #logging.info("IRQ pin", channel, "went active LOW.")
     tx_ds, tx_df, rx_dr = radio.whatHappened()   # get IRQ status flags
     if tx_df:
         radio.flush_tx()
-    print("Interrupt - tx_ds: {}, tx_df: {}, rx_dr: {}".format(tx_ds, tx_df, rx_dr))
+    logging.info("Interrupt - tx_ds: {}, tx_df: {}, rx_dr: {}".format(tx_ds, tx_df, rx_dr))
     if rx_dr:
         # process payload and check
         process_payload(True)
@@ -85,7 +103,7 @@ def process_payload(check_payload):
         payloadLen = radio.getDynamicPayloadSize()
         # fetch 1 payload from RX FIFO
         buffer = radio.read(payloadLen)
-        print("payload received... pipe:{} buffer:{} radio payload:{}".format(
+        logging.info("payload received... pipe:{} buffer:{} radio payload:{}".format(
             pipe_number, len(buffer), payloadLen))
 
         #t = threading.Thread(target=process_payload2,args=(pipe_number,buffer))
@@ -94,8 +112,23 @@ def process_payload(check_payload):
         return True
     else:
         if check_payload:
-            print("weird - IRQ triggered but no payload ???!!!")
+            logging.info("weird - IRQ triggered but no payload ???!!!")
         return False
+
+def unpack_from_buffer(buffer, bufEnd_ref, data_type):
+    try:
+        bufEnd = bufEnd_ref[0]
+        data_size = struct.calcsize(data_type)
+        bufEnd_new = bufEnd + data_size
+        if len(buffer[bufEnd:bufEnd_new]) == data_size:
+            bufEnd_ref[0] = bufEnd_new
+            return struct.unpack(f"<{data_type}", buffer[bufEnd:bufEnd_new])[0]
+        else:
+            raise ValueError(f"Buffer too small for {data_type} - buffer len {len(buffer)} - start {bufEnd} - end {bufEnd_new}")
+    except Exception as e:
+        logging.exception(f"Failed to unpack buffer - data type={data_type} - buffer len={len(buffer)} - start={bufEnd} - end={bufEnd_new}")
+        logging.error(f"Buffer content: {buffer.hex()}")
+        raise
 
 def process_payload2(pipe_number,buffer):
     # use struct.unpack() to convert the buffer into usable data
@@ -114,38 +147,27 @@ def process_payload2(pipe_number,buffer):
     retain = True
     published = False
 
-    bufStart = 0
-    bufEnd = 0
+    bufEnd_ref = [0]
     # unsigned long nodeID;
-    bufStart = bufEnd
-    bufEnd = bufStart + struct.calcsize('b')
-    nodeID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
+    nodeID = unpack_from_buffer(buffer, bufEnd_ref, 'b')
     if (nodeID < 0 or nodeID >= len(node_roots)):
-        print(f"ERROR - invalid node id received:{nodeID}")
+        logging.info(f"ERROR - invalid node id received:{nodeID}")
         return
 
     # unsigned long payloadID;
-    bufStart = bufEnd
-    bufEnd = bufStart + struct.calcsize('b')
-    payloadID = int(struct.unpack("b", buffer[bufStart:bufEnd])[0])
+    payloadID = unpack_from_buffer(buffer, bufEnd_ref, 'b')
     if (payloadID == 0):
         # float temp;
-        bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('f')
-        temp = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        temp = unpack_from_buffer(buffer, bufEnd_ref, 'f')
 
         # float voltage;
-        bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('f')
-        voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        voltage = unpack_from_buffer(buffer, bufEnd_ref, 'f')
         # convert mv to V
         if voltage > 0:
             voltage = voltage * 1.0 / 1000.0
 
         # float humidity;
-        bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('f')
-        humidity = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        humidity = unpack_from_buffer(buffer, bufEnd_ref, 'f')
 
         TryPublish(node_roots[nodeID] +
                     "/Arduino/Voltage", voltage, qos, retain)
@@ -164,7 +186,7 @@ def process_payload2(pipe_number,buffer):
             TryPublish(node_roots[nodeID] +
                         "/AM2320/Humidity", humidity, qos, retain)
 
-        print("{} {} Data T:{:0.2f} V:{} H:{}%".format(
+        logging.info("{} {} Data T:{:0.2f} V:{} H:{}%".format(
             str(datetime.datetime.now()), pipe_number, temp, voltage, humidity))
 
         fullPath = os.path.expanduser(
@@ -182,29 +204,22 @@ def process_payload2(pipe_number,buffer):
     elif payloadID == 1:
         # debug buffer
         vhex = np.vectorize(hex)
-        # print("buffer={}".format(vhex(buffer)))
+        # logging.info("buffer={}".format(vhex(buffer)))
+
         # unsigned long amb_als;
-        bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('L')
-        amb_als = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
+        amb_als = unpack_from_buffer(buffer, bufEnd_ref, 'L')
 
         # unsigned long amb_ir;
-        bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('L')
-        amb_ir = struct.unpack("<L", buffer[bufStart:bufEnd])[0]
-        #print("amb_ir={}".format(vhex(buffer[bufStart:bufEnd])))
+        amb_ir = unpack_from_buffer(buffer, bufEnd_ref, 'L')
 
         # float uv_index;
-        bufStart = bufEnd;
-        bufEnd = bufStart + struct.calcsize('f');
-        uv_index = 1.0 * struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        uv_index = unpack_from_buffer(buffer, bufEnd_ref, 'f')
+        uv_index = 1.0 * uv_index
         # https:#github.com/adafruit/Adafruit_SI1145_Library/blob/master/examples/si1145test/si1145test.ino
         uv_index = uv_index / 100.0; # the index is multiplied by 100 
 
         # float uv_index;
-        bufStart = bufEnd;
-        bufEnd = bufStart + struct.calcsize('L');
-        readout_ms = struct.unpack("<L", buffer[bufStart:bufEnd])[0]                
+        readout_ms = unpack_from_buffer(buffer, bufEnd_ref, 'L')        
                             
         lux = calcLux(amb_als,amb_ir)
         TryPublish(node_roots[nodeID] +
@@ -215,22 +230,18 @@ def process_payload2(pipe_number,buffer):
                     "/GY1145/UV", uv_index, qos, retain)      
         TryPublish(node_roots[nodeID] +
                     "/GY1145/Luminosity", lux, qos, retain)                                                
-        print("{} {} Data AmbALS:{} AmbIR:{} UV:{:0.2f} Lux:{} - {} ms".format(
-            str(datetime.datetime.now()), pipe_number, amb_als, amb_ir,uv_index,lux,readout_ms))
+        logging.info("{} Data AmbALS:{} AmbIR:{} UV:{:0.2f} Lux:{} - {} ms".format(
+            pipe_number, amb_als, amb_ir,uv_index,lux,readout_ms))
 
     elif payloadID == 3:
         # unsigned int lux; should be 4 bytes but is 2
-        bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('f')
-        luxValue = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        luxValue = unpack_from_buffer(buffer, bufEnd_ref, 'f')
                             
         TryPublish(node_roots[nodeID] +
                     "/TSL2261/LUX", luxValue, qos, retain)
 
         # float voltage;
-        bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('f')
-        voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        voltage = unpack_from_buffer(buffer, bufEnd_ref, 'f')
         # convert mv to V
         if voltage > 0:
             voltage = voltage * 1.0 / 1000.0
@@ -238,22 +249,17 @@ def process_payload2(pipe_number,buffer):
         TryPublish(node_roots[nodeID] +
                     "/Arduino/Voltage", voltage, qos, retain)
 
-        print("{} {} Data Lux:{} V:{}".format(
-            str(datetime.datetime.now()), pipe_number, luxValue,voltage))
+        logging.info("{} Data Lux:{} V:{}".format(pipe_number, luxValue,voltage))
 
     elif payloadID == 4:
         # unsigned int lux; should be 4 bytes but is 2
-        bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('h')
-        analogValue = struct.unpack("<h", buffer[bufStart:bufEnd])[0]
+        analogValue = unpack_from_buffer(buffer, bufEnd_ref, 'h')
                             
         TryPublish(node_roots[nodeID] +
                     "/Arduino/Analog", analogValue, qos, retain)
 
         # float voltage;
-        bufStart = bufEnd
-        bufEnd = bufStart + struct.calcsize('f')
-        voltage = struct.unpack("<f", buffer[bufStart:bufEnd])[0]
+        voltage = unpack_from_buffer(buffer, bufEnd_ref, 'f')
         # convert mv to V
         if voltage > 0:
             voltage = voltage * 1.0 / 1000.0
@@ -261,11 +267,11 @@ def process_payload2(pipe_number,buffer):
         TryPublish(node_roots[nodeID] +
                     "/Arduino/Voltage", voltage, qos, retain)
 
-        print("{} {} Data Analog:{} V:{}".format(
-            str(datetime.datetime.now()), pipe_number, analogValue,voltage))
+        logging.info("{} Data Analog:{} V:{}".format(
+            pipe_number, analogValue,voltage))
 
     else:
-        print("invalid payload id:{}".format(payloadID))
+        logging.info("invalid payload id:{}".format(payloadID))
 
     # debug
 
@@ -274,26 +280,25 @@ def process_payload2(pipe_number,buffer):
         # TryPublish(node_roots[nodeID] + "/VEML6075/UVi",uv_index,qos, retain)
         # TryPublish(node_roots[nodeID] + "/VEML6075/UVa",uv_a,qos, retain)
         # TryPublish(node_roots[nodeID] + "/VEML6075/UVb",uv_b,qos, retain)
-        # print("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
+        # logging.info("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
     #client.loop_stop()
-    # print details about the received packet
-    print(
-        "{} {} Received {} bytes - node {} - payload {}".format(
-            str(datetime.datetime.now()
-                ), pipe_number, radio.payloadSize, nodeID, payloadID
+    # logging.info details about the received packet
+    logging.info(
+        "{} Received {} bytes - node {} - payload {}".format(
+            pipe_number, radio.payloadSize, nodeID, payloadID
         )
     )
     # start_timer = time.monotonic()  # reset the timeout timer
 
 
 def listen(timeout=1198): #//20 minutes restart
-    """Listen for any payloads and print the transaction
+    """Listen for any payloads and logging.info the transaction
 
     :param int timeout: The number of seconds to wait (with no transmission)
         until exiting function.
     """
-    #print("{} {} Data Lux:{} V:{}".format(str(datetime.datetime.now()), pipe_number, luxValue,voltage))
-    print(f"{str(datetime.datetime.now())} - waiting for signal... radio payload:{radio.payloadSize}")
+    #logging.info("{} {} Data Lux:{} V:{}".format(str(datetime.datetime.now()), pipe_number, luxValue,voltage))
+    logging.info(f"waiting for signal... radio payload:{radio.payloadSize}")
     radio.listen = True  # put radio in RX mode
 
     start_timer = time.monotonic()
@@ -302,7 +307,7 @@ def listen(timeout=1198): #//20 minutes restart
         if (process_payload(False)):
             start_timer = time.monotonic()
     time.sleep(0.5)
-    print(f"{str(datetime.datetime.now())} - No data received - Leaving RX role...")
+    logging.info(f"No data received - Leaving RX role...")
     # recommended behavior is to keep in TX mode while idle
     radio.listen = False
     
@@ -337,12 +342,12 @@ def TryPublish(topic, payload=None, qos=0, retain=False):
         success = ret.rc == paho.MQTT_ERR_SUCCESS
         retries = retries + 1
     if (retries > 1):
-        print("WARNING: {} retries for message - success: {}".format(retries, success))
+        logging.info("WARNING: {} retries for message - success: {}".format(retries, success))
     if (success):
-        print("Successfully published {}:{} retries: {}".format(
+        logging.info("Successfully published {}:{} retries: {}".format(
             topic, payload, retries))
     else:
-        print("Error publishing {}:{} retries: {}".format(topic, payload, retries))
+        logging.info("Error publishing {}:{} retries: {}".format(topic, payload, retries))
 
 
 if __name__ == "__main__":
@@ -353,7 +358,7 @@ if __name__ == "__main__":
     client.connect("homeassistant.local", 1883, 60)
 
     client.loop_start()
-    print("connected to MQTT broker")
+    logging.info(f"connected to MQTT broker - CSN: {csn_pin} - CE: {ce_pin}")
 
     # client.on_publish = on_publish
     # initialize the nRF24L01 on the spi bus
@@ -362,8 +367,8 @@ if __name__ == "__main__":
         raise RuntimeError("radio hardware is not responding")
 
     receiver_address = b"1Node"
-    #print("{} {} Data Lux:{} V:{}".format(str(datetime.datetime.now()), pipe_number, luxValue,voltage))
-    print(f"{str(datetime.datetime.now())} - Receiver address is {receiver_address.hex()} - driver is {RF24_DRIVER} - radio connected: {radio.isChipConnected()}")
+    #logging.info("{} {} Data Lux:{} V:{}".format(str(datetime.datetime.now()), pipe_number, luxValue,voltage))
+    logging.info(f"Receiver address is {receiver_address.hex()} - driver is {RF24_DRIVER} - radio connected: {radio.isChipConnected()}")
     # It is very helpful to think of an address as a path instead of as
     # an identifying device destination
 
@@ -391,11 +396,11 @@ if __name__ == "__main__":
     radio.dynamic_payloads = True
     # radio.payloadSize = (2*struct.calcsize('H')+2*struct.calcsize('f')+
     #                     struct.calcsize('f')+3*struct.calcsize('H')+struct.calcsize('f'))
-    # for debugging, we have 2 options that print a large block of details
-    # (smaller) function that prints raw register values
-    # radio.printDetails()
-    # (larger) function that prints human readable data
-    # radio.printPrettyDetails()
+    # for debugging, we have 2 options that logging.info a large block of details
+    # (smaller) function that logging.infos raw register values
+    # radio.logging.infoDetails()
+    # (larger) function that logging.infos human readable data
+    # radio.logging.infoPrettyDetails()
 
     # on data ready test
     #Configuring IRQ pin to only ignore 'on data sent' event
@@ -403,12 +408,12 @@ if __name__ == "__main__":
     radio.print_pretty_details()
 
     try:
-        print(f"hostname is {hostname}")        
+        logging.info(f"hostname is {hostname}")        
         TryPublish(radio_status, "ON", 2, True)
         listen()
         client.loop_stop()
     except KeyboardInterrupt:
-        print(" Keyboard Interrupt detected. Exiting...")
+        logging.warning("Keyboard Interrupt detected. Exiting...")
         radio.powerDown()
         client.loop_stop()
         sys.exit()

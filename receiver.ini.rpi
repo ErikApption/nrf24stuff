@@ -1,0 +1,3 @@
+[RF24]
+ce_pin = 22
+csn_pin = 0
