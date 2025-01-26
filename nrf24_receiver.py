@@ -120,7 +120,7 @@ def unpack_from_buffer(buffer, bufEnd_ref, data_type):
         else:
             raise ValueError(f"Buffer too small for {data_type} - buffer len {len(buffer)} - start {bufEnd} - end {bufEnd_new}")
     except Exception as e:
-        logging.exception(f"Failed to unpack buffer - data type={data_type} - buffer len={len(buffer)} - start={bufEnd} - end={bufEnd_new}")
+        logging.exception(f"Failed to unpack buffer - data type={data_type} - data size={data_size} - buffer len={len(buffer)} - start={bufEnd} - end={bufEnd_new}")
         logging.error(f"Buffer content: {buffer.hex()}")
         raise
 
@@ -201,10 +201,10 @@ def process_payload2(pipe_number,buffer):
         # logging.info("buffer={}".format(vhex(buffer)))
 
         # unsigned long amb_als;
-        amb_als = unpack_from_buffer(buffer, bufEnd_ref, 'L')
+        amb_als = unpack_from_buffer(buffer, bufEnd_ref, 'I')
 
         # unsigned long amb_ir;
-        amb_ir = unpack_from_buffer(buffer, bufEnd_ref, 'L')
+        amb_ir = unpack_from_buffer(buffer, bufEnd_ref, 'I')
 
         # float uv_index;
         uv_index = unpack_from_buffer(buffer, bufEnd_ref, 'f')
@@ -213,7 +213,7 @@ def process_payload2(pipe_number,buffer):
         uv_index = uv_index / 100.0; # the index is multiplied by 100 
 
         # float uv_index;
-        readout_ms = unpack_from_buffer(buffer, bufEnd_ref, 'L')        
+        readout_ms = unpack_from_buffer(buffer, bufEnd_ref, 'I')        
                             
         lux = calcLux(amb_als,amb_ir)
         TryPublish(node_roots[nodeID] +
