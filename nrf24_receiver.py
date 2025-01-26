@@ -20,9 +20,7 @@ import logging
 if 'INVOCATION_ID' in os.environ:
     logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 else:
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 hostname = socket.gethostname()
 radio_status = f"weather-gtw/NRF24/Status"
