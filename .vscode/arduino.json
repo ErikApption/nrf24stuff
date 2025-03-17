@@ -1,0 +1,5 @@
+{
+    "board": "Cosa:avr:pro-mini-8",
+    "port": "COM9",
+    "sketch": "pool_sensor\\pool_sensor.ino"
+}

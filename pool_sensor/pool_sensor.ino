@@ -1,11 +1,8 @@
-
-
 //#define DEBUG_MODE
-
 //#define WDT_ENABLED
 
 #include <SPI.h>
-#include "printf.h"
+#include "print.h"
 #include "RF24.h"
 #include <LowPower.h>
 #include <OneWire.h>
@@ -25,7 +22,6 @@
 #define ERR_CODE_CYCLES 80 // flash every 80 seconds * 80 = 6400 ~ 2 hours
 
 #define ONE_WIRE_BUS 3
-#define POWER_PIN 5
 #define STATUS_LED 4
 #define MAX_RADIO_RETRIES 10
 #define NODE_ID 0 // pool
@@ -76,8 +72,6 @@ void setup()
 	}
 #endif
 
-	pinMode(POWER_PIN, OUTPUT); // sets the digital pin 13 as output
-
 	// print example's introductory prompt
 	Debug(F("Sensor "));
 	Debugln(NODE_ID);
@@ -100,10 +94,7 @@ void loop()
 	payload.voltage = Vcc::measure();
 	Debugln(payload.voltage);
 
-	digitalWrite(POWER_PIN, HIGH); // sets the digital pin 13 on
-	// for (int il = 0; il < 20;il++)
-	delay(500);
-
+	// 1. First, we need to wake up the radio as it is in power down mode
 	bool radioAvail = false;
 	for (int rRetries = 0; rRetries < 10; rRetries++)
 	{
@@ -114,8 +105,6 @@ void loop()
 		}
 		Debugln(F("radio hardware is not responding!!"));
 		error_code = ERR_RADIO;
-		led.flash(error_code);
-		delay(1000);
 #ifdef WDT_ENABLED	
 		wdt_reset();
 #endif		
@@ -138,7 +127,7 @@ void loop()
 				sensorReady = 0;
 				payload.temp = NAN;
 				error_code = ERR_SENSOR;
-				led.flash(error_code);
+				delay(100);
 #ifdef WDT_ENABLED	
 				wdt_reset();
 #endif
@@ -193,20 +182,17 @@ void loop()
 
 		payload.payloadID = 0;
 
-		bool report = false;
+
 		//bool loaded = false;
 		long transTime = 0;
 		Debugln("Sending payload");
 
 		unsigned long start_timer = micros();       // start the timer
 		//loaded = radio.writeBlocking(&payload, sizeof(payload),TX_TIMEOUT); // transmit & save the report
-		for (int transRetries = 0; transRetries < 10; transRetries++)
-		{ 
-			report = radio.write(&payload, sizeof(payload)); // transmit & save the report
-			delay(500);
-			if (report)
-				break;
-		}
+
+	  radio.writeFast(&payload, sizeof(payload)); // transmit & save the report
+    bool fifoSuccess = radio.txStandBy(2000);// Using extended timeouts, returns 1 if success. Retries failed payloads for 1 seconds before returning 0.
+
 		//report = radio.txStandBy(TX_TIMEOUT,true) && loaded;		
 		Debugln("Payload size: ");
 		Debugln(sizeof(payload));
@@ -216,7 +202,7 @@ void loop()
 #ifdef WDT_ENABLED	
 		wdt_reset();
 #endif
-		if (report)
+		if (fifoSuccess)
 		{
 			led.flash(ERR_SUCCESS);
 			Debug(F("Transmission successful! ")); // payload was delivered
@@ -230,7 +216,6 @@ void loop()
 		{
 			transmitPower = RF24_PA_HIGH;
 			error_code = ERR_TRANS_FAILED;
-			led.flash(error_code);
 			Debugln(F("Transmission failed or timed out")); // payload was not delivered
 			delay(10);
 			// radio.printPrettyDetails(); // (larger) function that prints human readable data
@@ -238,7 +223,6 @@ void loop()
 
 		radio.powerDown();
 	}
-	digitalWrite(POWER_PIN, LOW); // sets the digital pin 13 on
 
 #ifdef WDT_ENABLED	
 	wdt_reset();
@@ -253,6 +237,7 @@ void loop()
 	int sleep_cycles = (error_code == ERR_SUCCESS) ? SLEEP_CYCLES_SUCCESS : SLEEP_CYCLES_ERROR;
 #endif
 
+	led.flash(error_code);
 	if (error_code != ERR_SUCCESS)
 	{
 		lastErrorCode = error_code;
