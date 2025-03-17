@@ -24,6 +24,7 @@ else:
 
 hostname = socket.gethostname()
 radio_status = f"weather-gtw/NRF24/Status"
+last_hour_msg_count = f"weather-gtw/NRF24/MessageCountLastHour"
 
 # Read configuration
 config = configparser.ConfigParser()
@@ -32,6 +33,11 @@ config.read(config_path)
 
 ce_pin = config.getint('RF24', 'ce_pin', fallback=22)
 csn_pin = config.getint('RF24', 'csn_pin', fallback=0)
+
+# List to store message counts for each 15-minute interval
+message_counts = [0] * 4
+last_update_time = time.time()
+message_count = 0
 
 ########### USER CONFIGURATION ###########
 # See https:#github.com/TMRh20/RF24/blob/master/pyRF24/readme.md
@@ -85,6 +91,24 @@ def interrupt_handler():
         # process payload and check
         process_payload(True)
 
+
+def update_message_counts():
+    global message_counts, message_count, last_update_time
+    # Calculate the total number of messages received in the last hour
+    total_messages_last_hour = sum(message_counts) + message_count
+    logging.info(f"Messages received in the last hour: {total_messages_last_hour}")
+    TryPublish(last_hour_msg_count, f"{total_messages_last_hour}", 2, False)
+
+    current_time = time.time()
+    if current_time - last_update_time >= 900:  # 15 minutes
+        # Shift the message counts and add the current count
+        message_counts.pop(0)
+        message_counts.append(message_count)
+        # Reset the message count and update the last update time
+        message_count = 0
+        last_update_time = current_time
+
+
 # setup IRQ GPIO pin
 # The GPIO.BOARD option specifies that you are referring to the pins by the number of the pin on the plug 
 # GPIO.setmode(GPIO.BOARD)
@@ -92,6 +116,7 @@ def interrupt_handler():
 # GPIO.add_event_detect(IRQ_PIN, GPIO.FALLING, callback=interrupt_handler)
 
 def process_payload(check_payload):
+    global message_count
     has_payload, pipe_number = radio.available_pipe()
     if has_payload:        
         payloadLen = radio.getDynamicPayloadSize()
@@ -99,6 +124,9 @@ def process_payload(check_payload):
         buffer = radio.read(payloadLen)
         logging.info("payload received... pipe:{} buffer:{} radio payload:{}".format(
             pipe_number, len(buffer), payloadLen))
+
+        # Increment message count
+        message_count += 1
 
         #t = threading.Thread(target=process_payload2,args=(pipe_number,buffer))
         #t.start()
@@ -276,7 +304,7 @@ def process_payload2(pipe_number,buffer):
         # TryPublish(node_roots[nodeID] + "/VEML6075/UVb",uv_b,qos, retain)
         # logging.info("Date={5} Temp={0:0.1f}C Humidity={1:0.1f}% Published={2} ret1={3} ret2={4}".format(temperature, humidity,published,ret1,ret2,datetime.datetime.now()))
     #client.loop_stop()
-    # logging.info details about the received packet
+    # logging.info details about the received message
     logging.info(
         "{} Received {} bytes - node {} - payload {}".format(
             pipe_number, radio.payloadSize, nodeID, payloadID
@@ -300,6 +328,8 @@ def listen(timeout=1198): #//20 minutes restart
         # process payload but do not check
         if (process_payload(False)):
             start_timer = time.monotonic()
+                # Update message counts every 15 minutes
+    update_message_counts()
     time.sleep(0.5)
     logging.info(f"No data received - Leaving RX role...")
     # recommended behavior is to keep in TX mode while idle
@@ -328,14 +358,14 @@ def calcLux(vis, ir):
 
 
 def TryPublish(topic, payload=None, qos=0, retain=False):
-    retries = 0
+    retries = -1
     success = False
     while (retries < 5 and success == False):
         ret = client.publish(topic, payload, qos, retain)
         ret.wait_for_publish()
         success = ret.rc == paho.MQTT_ERR_SUCCESS
         retries = retries + 1
-    if (retries > 1):
+    if (retries >= 1):
         logging.info("WARNING: {} retries for message - success: {}".format(retries, success))
     if (success):
         logging.info("Successfully published {}:{} retries: {}".format(
@@ -372,6 +402,7 @@ if __name__ == "__main__":
 
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
+
     radio.set_pa_level(RF24_PA_LOW, True)  # RF24_PA_MAX is default #RF24_PA_LOW
     radio.channel = 5
 
@@ -404,6 +435,7 @@ if __name__ == "__main__":
     try:
         logging.info(f"hostname is {hostname}")        
         TryPublish(radio_status, "ON", 2, True)
+        update_message_counts()        
         listen()
         client.loop_stop()
     except KeyboardInterrupt:

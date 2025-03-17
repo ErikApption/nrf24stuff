@@ -1,6 +1,7 @@
 paho.mqtt 
 numpy
 pyrf24
+#pyrf24 0.4.2 working gpiochip4
 #RPi.GPIO
 #OPi.GPIO
 #gpiod

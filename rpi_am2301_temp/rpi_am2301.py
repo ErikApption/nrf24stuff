@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2021 ladyada for Adafruit Industries
 # SPDX-License-Identifier: MIT
 # Installation: python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30 adafruit-circuitpython-dht
-from paho.mqtt.client import Client
+import paho.mqtt.client as mqtt
 from ha_mqtt.mqtt_thermometer import MqttThermometer
 from ha_mqtt.mqtt_device_base import MqttDeviceSettings
 from ha_mqtt.ha_device import HaDevice
@@ -20,7 +20,7 @@ def on_log(mqttc, obj, level, string):
     print("[{}] {} - {}  - {}".format(datetime.datetime.now(),level,string,obj))
 
 # instantiate an paho mqtt client and connect to the mqtt server
-client = Client("StudyRPi")
+client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,"StudyRPi")
 client.connect("homeassistant.local", 1883)
 # client.loop_start()
 client.on_log = on_log
