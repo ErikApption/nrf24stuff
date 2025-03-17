@@ -12,6 +12,7 @@ import socket
 import configparser
 import os
 import logging
+import json
 #import gpiod
 #from gpiod.line import Edge
 
@@ -25,6 +26,7 @@ else:
 hostname = socket.gethostname()
 radio_status = f"weather-gtw/NRF24/Status"
 last_hour_msg_count = f"weather-gtw/NRF24/MessageCountLastHour"
+msg_count_status_file = os.path.expanduser("~/nrf24_message_counts.json")
 
 # Read configuration
 config = configparser.ConfigParser()
@@ -91,6 +93,27 @@ def interrupt_handler():
         # process payload and check
         process_payload(True)
 
+def save_message_counts_to_json(file_path):
+    data = {
+        "message_counts": message_counts,
+        "message_count": message_count,
+        "last_update_time": last_update_time
+    }
+    with open(file_path, 'w') as json_file:
+        json.dump(data, json_file)
+    logging.info(f"Message counts saved to {file_path}")
+
+def load_message_counts_from_json(file_path):
+    global message_counts, message_count, last_update_time
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as json_file:
+            data = json.load(json_file)
+            message_counts = data.get("message_counts", [0] * 4)
+            message_count = data.get("message_count", 0)
+            last_update_time = data.get("last_update_time", time.time())
+        logging.info(f"Message counts loaded from {file_path}")
+    else:
+        logging.warning(f"{file_path} does not exist. Using default values.")    
 
 def update_message_counts():
     global message_counts, message_count, last_update_time
@@ -115,7 +138,7 @@ def update_message_counts():
 # GPIO.setup(IRQ_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 # GPIO.add_event_detect(IRQ_PIN, GPIO.FALLING, callback=interrupt_handler)
 
-def process_payload(check_payload):
+def process_payload():
     global message_count
     has_payload, pipe_number = radio.available_pipe()
     if has_payload:        
@@ -133,8 +156,6 @@ def process_payload(check_payload):
         process_payload2(pipe_number,buffer)
         return True
     else:
-        if check_payload:
-            logging.info("weird - IRQ triggered but no payload ???!!!")
         return False
 
 def unpack_from_buffer(buffer, bufEnd_ref, data_type):
@@ -310,6 +331,7 @@ def process_payload2(pipe_number,buffer):
             pipe_number, radio.payloadSize, nodeID, payloadID
         )
     )
+
     # start_timer = time.monotonic()  # reset the timeout timer
 
 
@@ -326,9 +348,11 @@ def listen(timeout=1198): #//20 minutes restart
     start_timer = time.monotonic()
     while (time.monotonic() - start_timer) < timeout:
         # process payload but do not check
-        if (process_payload(False)):
+        if (process_payload()):
             start_timer = time.monotonic()
-                # Update message counts every 15 minutes
+            # Update message counts every 15 minutes
+            update_message_counts()
+    # Update message counts every 15 minutes
     update_message_counts()
     time.sleep(0.5)
     logging.info(f"No data received - Leaving RX role...")
@@ -403,7 +427,8 @@ if __name__ == "__main__":
     # set the Power Amplifier level to -12 dBm since this test example is
     # usually run with nRF24L01 transceivers in close proximity of each other
 
-    radio.set_pa_level(RF24_PA_LOW, True)  # RF24_PA_MAX is default #RF24_PA_LOW
+    #radio.set_pa_level(RF24_PA_LOW, True)  # RF24_PA_MAX is default #RF24_PA_LOW
+    radio.set_pa_level(RF24_PA_MAX, False)  # RF24_PA_MAX is default #RF24_PA_LOW
     radio.channel = 5
 
     #radio.setAutoAck(True)
@@ -433,11 +458,14 @@ if __name__ == "__main__":
     radio.print_pretty_details()
 
     try:
-        logging.info(f"hostname is {hostname}")        
+        logging.info(f"hostname is {hostname}")
+        # Load message counts from JSON file
+        load_message_counts_from_json(msg_count_status_file)
         TryPublish(radio_status, "ON", 2, True)
         update_message_counts()        
         listen()
         client.loop_stop()
+        save_message_counts_to_json(msg_count_status_file)
     except KeyboardInterrupt:
         logging.warning("Keyboard Interrupt detected. Exiting...")
         radio.powerDown()
