@@ -1,5 +1,10 @@
 esphome:
   name: furnace
+  on_boot:
+    priority: -10
+    then:
+      - delay: 30s
+      - script.execute: turn_off_backlight
 
 esp32:
   board: esp32dev
@@ -43,6 +48,7 @@ i2c:
 sensor:
   - platform: dht
     pin: GPIO27
+    id: dht11
     temperature:
       name: "DHT11 Temperature"
       id: dht11_temperature
@@ -65,36 +71,48 @@ binary_sensor:
     name: "Home Assistant API Status"
     entity_id: binary_sensor.esp32_lcd_connected
     id: ha_status
-  - platform: template
-    name: "Furnace change Difference"
-    id: temperature_difference
-    lambda: |-
-      // Get the current temperature values from both sensors
-      float dht11_temp = id(dht11_temperature).state;
-      float ds18b20_temp = id(ds18b20_temperature).state;
-
-      // Define a threshold for the difference (e.g., 1.0°C)
-      float threshold = 5.0;
-
-      // Calculate the absolute difference between the two sensors
-      float difference = abs(dht11_temp - ds18b20_temp);
-
-      // Trigger the binary sensor if the difference exceeds the threshold
-      return difference > threshold;
 
 display:
   - platform: lcd_pcf8574
     id: my_lcd
     dimensions: 20x2
     address: 0x27  # Adjust if needed (use I2C scan)
-    update_interval: 2s
+    update_interval: 2s 
     lambda: |-
       it.clear();
-      bool wifi_connected = id(wifi_status).state;
-      bool ha_connected = id(ha_status).state;
+      it.printf(0, 0, "Room:%.1f", id(dht11_temperature).state);
+      it.printf(0, 1, "Wifi:%s Fn:%.1f", id(wifi_status).state ? "On" : "Off", id(ds18b20_temperature).state);  
 
-      // Line 1: Wi-Fi Status
-      it.printf(0, 0, "Wi-Fi: %s", wifi_connected ? "On" : "Off");
-      
-      // Line 2: Home Assistant Status
-      it.printf(0, 1, "HA API: %s", ha_connected ? "On" : "Off");
+# Script to update sensor intervals
+script:
+  - id: update_intervals
+    then:
+      - lambda: |-
+          // Get the current temperature values from both sensors
+          float dht11_temp = id(dht11_temperature).state;
+          float ds18b20_temp = id(ds18b20_temperature).state;
+
+          // Define a threshold for the difference (e.g., 5.0°C)
+          float threshold = 5.0;
+
+          // Calculate the absolute difference between the two sensors
+          float difference = abs(dht11_temp - ds18b20_temp);
+
+          // Update intervals based on the temperature difference
+          if (difference > threshold) {
+            id(dht11).set_update_interval(2000);  // 2 seconds
+            id(ds18b20_temperature).set_update_interval(2000);  // 2 seconds
+          } else {
+            id(dht11).set_update_interval(10000);  // 10 seconds
+            id(ds18b20_temperature).set_update_interval(10000);  // 10 seconds
+          }
+  - id: turn_off_backlight
+    then:
+      - lambda: |-
+          id(my_lcd).no_backlight();      
+
+# Trigger the script based on the temperature difference
+interval:
+  - interval: 1s
+    then:
+      - script.execute: update_intervals
