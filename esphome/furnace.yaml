@@ -1,0 +1,100 @@
+esphome:
+  name: furnace
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+wifi:
+  ssid: "GrenoblePirates-2G"
+  password: "s4on3a93z"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp32 Sensors Fallback Hotspot"
+    password: "furnace1181"
+
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "QFD8z+IqAKimB42pDJeV2kPp7Hyhnaclt1DSp+oCSqQ="
+
+ota:
+  - platform: esphome
+    password: "furnace1181"
+
+# Example configuration entry
+one_wire:
+  - platform: gpio
+    pin: GPIO26
+
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+#  scan: true 
+
+# DHT11 Sensor
+sensor:
+  - platform: dht
+    pin: GPIO27
+    temperature:
+      name: "DHT11 Temperature"
+      id: dht11_temperature
+    humidity:
+      name: "DHT11 Humidity"
+    update_interval: 5s
+
+# DS18B20 Sensor
+  - platform: dallas_temp
+    name: "DS18B20 Temperature"
+    id: ds18b20_temperature
+    update_interval: 5s
+
+# Binary Sensor to Detect Major Difference
+binary_sensor:
+  - platform: status
+    name: "WiFi Status"
+    id: wifi_status
+  - platform: homeassistant
+    name: "Home Assistant API Status"
+    entity_id: binary_sensor.esp32_lcd_connected
+    id: ha_status
+  - platform: template
+    name: "Furnace change Difference"
+    id: temperature_difference
+    lambda: |-
+      // Get the current temperature values from both sensors
+      float dht11_temp = id(dht11_temperature).state;
+      float ds18b20_temp = id(ds18b20_temperature).state;
+
+      // Define a threshold for the difference (e.g., 1.0°C)
+      float threshold = 5.0;
+
+      // Calculate the absolute difference between the two sensors
+      float difference = abs(dht11_temp - ds18b20_temp);
+
+      // Trigger the binary sensor if the difference exceeds the threshold
+      return difference > threshold;
+
+display:
+  - platform: lcd_pcf8574
+    id: my_lcd
+    dimensions: 20x2
+    address: 0x27  # Adjust if needed (use I2C scan)
+    update_interval: 2s
+    lambda: |-
+      it.clear();
+      bool wifi_connected = id(wifi_status).state;
+      bool ha_connected = id(ha_status).state;
+
+      // Line 1: Wi-Fi Status
+      it.printf(0, 0, "Wi-Fi: %s", wifi_connected ? "On" : "Off");
+      
+      // Line 2: Home Assistant Status
+      it.printf(0, 1, "HA API: %s", ha_connected ? "On" : "Off");
