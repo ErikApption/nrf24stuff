@@ -1,0 +1,102 @@
+esphome:
+  name: living-room-plants
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "ZoHWjRKrWxdsUSPFN0sqErd7nf9+txg+QqrwBQTCtX8="
+
+ota:
+  - platform: esphome
+    password: "lrplants1181"
+
+wifi:
+  ssid: "GrenoblePirates-2G"
+  password: "s4on3a93z"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Living-Room-Plants"
+    password: "4yGQeAeRMDeX"
+
+captive_portal:
+    
+# Analog sensors
+sensor:
+  - platform: adc
+    pin: GPIO4
+    name: Soil Moisture Value 3
+    id:  soil_moisture3
+    attenuation: 12db
+    # accuracy_decimals: 1
+    raw: true
+    samples: 10
+    update_interval: 5s
+    icon: mdi:flower
+    unit_of_measurement: '%'
+    filters:
+      - calibrate_linear:
+          - 1341 -> 100.0
+          - 3469 -> 0.0      
+
+      - clamp:
+          min_value: 0
+          max_value: 100
+          ignore_out_of_range: false
+    # wet = 1341, dry = 3469
+    # filters:
+    #   - lambda: |-
+    #       if (x > 0.67) { 				// if over 0.7 volts, we are dry
+    #         return 0;
+    #       } else if (x < 0.28) { 			// if under 0.264 volts, we are fully saturated
+    #         return 100;
+    #       } else {
+    #         return (0.67-x) / (0.67-0.28) * 100.0; 	// use a linear fit for any values in between
+    #       }
+
+  - platform: adc
+    pin: GPIO3
+    name: Soil Moisture Value 2
+    id:  soil_moisture2
+    attenuation: 12db
+    samples: 10
+    # accuracy_decimals: 1
+    raw: true
+    update_interval: 5s
+    icon: mdi:flower
+    unit_of_measurement: '%'
+    filters:
+      - calibrate_linear:
+          - 1309 -> 100.0
+          - 3134 -> 0.0    
+      - clamp:
+          min_value: 0
+          max_value: 100
+          ignore_out_of_range: false
+
+  - platform: adc
+    pin: GPIO2
+    name: Soil Moisture Value 1
+    id:  soil_moisture1
+    attenuation: 12db
+    samples: 10
+    raw: true
+    update_interval: 5s
+    icon: mdi:flower
+    unit_of_measurement: '%'
+    filters:
+      - calibrate_linear:
+          - 1309 -> 100.0
+          - 3134 -> 0.0      
+      - clamp:
+          min_value: 0
+          max_value: 100
+          ignore_out_of_range: false

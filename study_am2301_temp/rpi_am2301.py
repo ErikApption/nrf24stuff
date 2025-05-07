@@ -31,7 +31,7 @@ hum = MqttThermometer(MqttDeviceSettings("Study AM2301 Humidity", "StudyHumidity
 #th = MqttThermometer("Study", "StudyTemp",client)
 
 # Initial the dht device, with data pin connected to:
-dhtDevice = adafruit_dht.DHT22(board.D17)
+dhtDevice = adafruit_dht.DHT22(board.D10)
 
 # you can pass DHT22 use_pulseio=False if you wouldn't like to use pulseio.
 # This may be necessary on a Linux single board computer like the Raspberry Pi,

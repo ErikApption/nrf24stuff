@@ -17,7 +17,7 @@ wifi:
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: "Esp32 Sensors Fallback Hotspot"
+    ssid: "Furnace-Sensors"
     password: "furnace1181"
 
 captive_portal:

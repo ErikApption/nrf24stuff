@@ -3,4 +3,6 @@ adafruit-circuitpython-bmp3xx
 adafruit-circuitpython-sgp30
 adafruit-circuitpython-dht
 paho-mqtt
-
+click
+adafruit-python-shell
+gpiod
