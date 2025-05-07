@@ -5,4 +5,4 @@ adafruit-circuitpython-dht
 paho-mqtt
 click
 adafruit-python-shell
-gpiod
+#gpiod

@@ -7,6 +7,8 @@ import paho.mqtt.client as mqtt
 from ha_mqtt.mqtt_thermometer import MqttThermometer
 from ha_mqtt.mqtt_device_base import MqttDeviceSettings
 from ha_mqtt.ha_device import HaDevice
+from adafruit_blinka.microcontroller.rockchip.rk3588 import pin
+import gpiod
 
 import time
 import board
@@ -31,7 +33,8 @@ hum = MqttThermometer(MqttDeviceSettings("Study AM2301 Humidity", "StudyHumidity
 #th = MqttThermometer("Study", "StudyTemp",client)
 
 # Initial the dht device, with data pin connected to:
-dhtDevice = adafruit_dht.DHT22(board.D10)
+# D15
+dhtDevice = adafruit_dht.DHT22(pin.GPIO3_C1)
 
 # you can pass DHT22 use_pulseio=False if you wouldn't like to use pulseio.
 # This may be necessary on a Linux single board computer like the Raspberry Pi,
@@ -44,9 +47,9 @@ for i in range(10):
         temperature_c = dhtDevice.temperature
         humidity = dhtDevice.humidity
         temp = f"{temperature_c:2.2f}"
-        #print(f"publishing temperature: {temp} {th.unit_of_measurement}")
-        th.publish_state(temp)
-        hum.publish_state(humidity)
+        print(f"publishing temperature: {temp}")
+        th.update_state(temp)
+        hum.update_state(humidity)
         success = True
         print(
             "[{}] Published Temp: {}    Humidity: {}".format(datetime.datetime.now(),temp, humidity)
