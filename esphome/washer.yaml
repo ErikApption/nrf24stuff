@@ -43,54 +43,102 @@ sensor:
     address: 0x68
     update_interval: 1s
     accel_x:
+      id: washer_accel_x # Add id for referencing
       name: "Washer Accel X"
       filters:
-      - offset: 9.90 # Adjust this value as needed
+      - offset: -9.90 # Adjust this value as needed
     accel_y:
+      id: washer_accel_y # Add id for referencing
       name: "Washer Accel Y"
       filters:
-      - offset: 1.7 # Adjust this value as needed
+      - offset: -1.7 # Adjust this value as needed
     accel_z:
+      id: washer_accel_z # Add id for referencing
       name: "Washer Accel Z"
       filters:
-      - offset: 0.23 # Adjust this value as needed
+      - offset: -0.23 # Adjust this value as needed
     gyro_x:
+      id: washer_gyro_x # Add id for referencing
       name: "Washer Gyro X"
       filters:
-      - offset: -2.07 # Adjust this value as needed
+      - offset: 2.07 # Adjust this value as needed
     gyro_y:
+      id: washer_gyro_y # Add id for referencing
       name: "Washer Gyro Y"
       filters:
       - offset: 0 # Adjust this value as needed
     gyro_z:
+      id: washer_gyro_z # Add id for referencing
       name: "Washer Gyro Z"
       filters:
-      - offset: -0.73 # Adjust this value as needed
+      - offset: 0.73 # Adjust this value as needed
+
+  - platform: template
+    name: "Washer Combined Gyro"
+    unit_of_measurement: "°/s"
+    icon: "mdi:rotate-3d-variant"
+    lambda: |-
+      return sqrt(pow(id(washer_gyro_x).state, 2) + pow(id(washer_gyro_y).state, 2) + pow(id(washer_gyro_z).state, 2));
+    update_interval: 1s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 15
+          send_every: 15
+          send_first_at: 1
+
+  - platform: template
+    name: "Washer Combined Acceleration"
+    unit_of_measurement: "m/s²"
+    icon: "mdi:axis-arrow"
+    lambda: |-
+      return sqrt(pow(id(washer_accel_x).state, 2) + pow(id(washer_accel_y).state, 2) + pow(id(washer_accel_z).state, 2));
+    update_interval: 1s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 15
+          send_every: 15
+          send_first_at: 1      
 
   - platform: mpu6050
     address: 0x69
     update_interval: 1s
     accel_x:
+      id: dryer_accel_x # Add id for referencing
       name: "Dryer Accel X"
       filters:
-      - offset: -9.36 # Adjust this value as needed
+      - offset: 9.36 # Adjust this value as needed
     accel_y:
+      id: dryer_accel_y # Add id for referencing
       name: "Dryer Accel Y"
       filters:
-      - offset: -1.28 # Adjust this value as needed
+      - offset: 1.28 # Adjust this value as needed
     accel_z:
+      id: dryer_accel_z # Add id for referencing
       name: "Dryer Accel Z"
       filters:
-      - offset: -0.27 # Adjust this value as needed
+      - offset: 0.27 # Adjust this value as needed
     gyro_x:
       name: "Dryer Gyro X"
       filters:
-      - offset: 3.17 # Adjust this value as needed
+      - offset: -3.17 # Adjust this value as needed
     gyro_y:
       name: "Dryer Gyro Y"
       filters:
-      - offset: -0.12 # Adjust this value as needed
+      - offset: 0.12 # Adjust this value as needed
     gyro_z:
       name: "Dryer Gyro Z"
       filters:
-      - offset: -0.98 # Adjust this value as needed
+      - offset: 0.98 # Adjust this value as needed
+
+  - platform: template
+    name: "Dryer Combined Acceleration"
+    unit_of_measurement: "m/s²"
+    icon: "mdi:axis-arrow"
+    lambda: |-
+      return sqrt(pow(id(dryer_accel_x).state, 2) + pow(id(dryer_accel_y).state, 2) + pow(id(dryer_accel_z).state, 2));
+    update_interval: 1s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 15
+          send_every: 15
+          send_first_at: 1

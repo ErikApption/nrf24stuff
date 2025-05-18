@@ -8,6 +8,11 @@ source venv/bin/activate
 pip3 install esphome
 ```
 
+```powershell
+python -m venv venv
+. .\venv\Scripts\activat
+```
+
 ## Enter Flash Mode
 
 - Hold the BOOT button (this pulls GPIO0 to GND).
