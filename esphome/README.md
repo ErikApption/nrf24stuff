@@ -16,8 +16,19 @@ pip3 install esphome
 
 The ESP32 is now in flash mode and ready for firmware uploads.
 
-## Generate image
+## Flash image
 
 ```bash
 esphome run furnace.yaml
 ```
+
+## Generate Binary Image
+
+To generate a binary image for manual upload:
+
+```bash
+esphome compile washer.yaml
+```
+
+The binary file will be saved in the `.esphome/build/<washer>/.pioenvs/<washer>` directory.
+

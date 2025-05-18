@@ -1,0 +1,92 @@
+esphome:
+  name: washer
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "ZoHWjRKrWxdsUSPFN0sqErd7nf9+txg+QqrwBQTCtX8="
+
+ota:
+  - platform: esphome
+    password: ""
+
+wifi:
+  ssid: "GrenoblePirates-2G"
+  password: "s4on3a93z"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Washer Fallback Hotspot"
+    password: "3lLFj9SszhOa"
+
+captive_portal:
+
+i2c:
+  sda: GPIO3
+  scl: GPIO4
+  scan: true
+
+sensor:
+  - platform: mpu6050
+    address: 0x68
+    update_interval: 1s
+    accel_x:
+      name: "Washer Accel X"
+      filters:
+      - offset: 9.90 # Adjust this value as needed
+    accel_y:
+      name: "Washer Accel Y"
+      filters:
+      - offset: 1.7 # Adjust this value as needed
+    accel_z:
+      name: "Washer Accel Z"
+      filters:
+      - offset: 0.23 # Adjust this value as needed
+    gyro_x:
+      name: "Washer Gyro X"
+      filters:
+      - offset: -2.07 # Adjust this value as needed
+    gyro_y:
+      name: "Washer Gyro Y"
+      filters:
+      - offset: 0 # Adjust this value as needed
+    gyro_z:
+      name: "Washer Gyro Z"
+      filters:
+      - offset: -0.73 # Adjust this value as needed
+
+  - platform: mpu6050
+    address: 0x69
+    update_interval: 1s
+    accel_x:
+      name: "Dryer Accel X"
+      filters:
+      - offset: -9.36 # Adjust this value as needed
+    accel_y:
+      name: "Dryer Accel Y"
+      filters:
+      - offset: -1.28 # Adjust this value as needed
+    accel_z:
+      name: "Dryer Accel Z"
+      filters:
+      - offset: -0.27 # Adjust this value as needed
+    gyro_x:
+      name: "Dryer Gyro X"
+      filters:
+      - offset: 3.17 # Adjust this value as needed
+    gyro_y:
+      name: "Dryer Gyro Y"
+      filters:
+      - offset: -0.12 # Adjust this value as needed
+    gyro_z:
+      name: "Dryer Gyro Z"
+      filters:
+      - offset: -0.98 # Adjust this value as needed
