@@ -16,7 +16,7 @@ api:
 
 ota:
   - platform: esphome
-    password: ""
+    password: "lrwasher1181"
 
 wifi:
   ssid: "GrenoblePirates-2G"
@@ -24,8 +24,12 @@ wifi:
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: "Washer Fallback Hotspot"
+    ssid: "Washer-Fallback-Hotspot"
     password: "3lLFj9SszhOa"
+
+# Example configuration entry
+web_server:
+  port: 8080
 
 captive_portal:
 
