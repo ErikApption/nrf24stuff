@@ -9,6 +9,7 @@ import time
 import struct
 import datetime
 from paho.mqtt.client import Client
+import paho.mqtt.client as paho
 #python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30 gpiod
 from ha_mqtt.mqtt_thermometer import MqttThermometer
 from ha_mqtt.mqtt_sensor import MqttSensor
@@ -28,18 +29,22 @@ if __name__ == "__main__":
     #i2c_bus = busio.I2C() #board.SCL, board.SDA, frequency=100000
 
     # instantiate an paho mqtt client and connect to the mqtt server
-    client = Client(client_id="BedroomRPi")
+    client = Client(paho.CallbackAPIVersion.VERSION2, "BedroomSensors")
     client.connect("homeassistant.local", 1883)
     client.loop_start()
 
     # instantiate an MQTTThermometer object
     dev = HaDevice("Bedroom BMP390", "BedroomBMP390")
     th = MqttThermometer(MqttDeviceSettings("Bedroom BMP390", "BedroomTemp",client,dev),"°C")
-    pres = MqttSensor(MqttDeviceSettings("Bedroom BMP390", "BedroomPressure",client,dev),"hPa",HaSensorDeviceClass.PRESSURE)
+    th.start()
+    pres = MqttSensor(MqttDeviceSettings("Bedroom BMP390", "BedroomPressure",client,dev),HaSensorDeviceClass.PRESSURE,"hPa")
+    pres.start()
 
     dev2 = HaDevice("Bedroom SGP30", "BedroomSGP30")
-    co2 = MqttSensor(MqttDeviceSettings("Bedroom SGP30", "Bedroom_eCO2",client,dev2),"ppm",HaSensorDeviceClass.PM10)
-    tvoc = MqttSensor(MqttDeviceSettings("Bedroom SGP30", "Bedroom_TVOC",client,dev2),"ppb",HaSensorDeviceClass.PM10)    
+    co2 = MqttSensor(MqttDeviceSettings("Bedroom SGP30", "Bedroom_eCO2",client,dev2),HaSensorDeviceClass.PM10,"ppm")
+    co2.start()
+    tvoc = MqttSensor(MqttDeviceSettings("Bedroom SGP30", "Bedroom_TVOC",client,dev2),HaSensorDeviceClass.PM10,"ppb")    
+    tvoc.start()
     #th = MqttThermometer("Bedroom", "BedroomTemp",client)    
     # good for RPI
     #i2c = board.I2C()
