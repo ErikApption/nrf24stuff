@@ -1,7 +1,7 @@
+#include <Arduino.h>
 //#define DEBUG_MODE
 
 #include <SPI.h>
-#include "printf.h"
 #include "RF24.h"
 //Low-Power
 #include <LowPower.h>
