@@ -74,30 +74,39 @@ sensor:
       - offset: 0.73 # Adjust this value as needed
 
   - platform: template
+    id: washer_combined_gyro # Add an id here if it doesn't have one
     name: "Washer Combined Gyro"
     unit_of_measurement: "°/s"
     icon: "mdi:rotate-3d-variant"
     lambda: |-
-      return sqrt(pow(id(washer_gyro_x).state, 2) + pow(id(washer_gyro_y).state, 2) + pow(id(washer_gyro_z).state, 2));
+      return abs(id(washer_gyro_x).state) + abs(id(washer_gyro_y).state) + abs(id(washer_gyro_z).state);
     update_interval: 1s
     filters:
-      - sliding_window_moving_average:
-          window_size: 15
-          send_every: 15
-          send_first_at: 1
+      # - sliding_window_moving_average:
+      #     window_size: 15
+      #     send_every: 15
+      #     send_first_at: 1
+      - max:
+          window_size: 10
+          send_every: 10
+
 
   - platform: template
     name: "Washer Combined Acceleration"
+    id: washer_combined_acceleration # Add an id here if it doesn't have one
     unit_of_measurement: "m/s²"
     icon: "mdi:axis-arrow"
     lambda: |-
       return sqrt(pow(id(washer_accel_x).state, 2) + pow(id(washer_accel_y).state, 2) + pow(id(washer_accel_z).state, 2));
     update_interval: 1s
     filters:
-      - sliding_window_moving_average:
-          window_size: 15
-          send_every: 15
-          send_first_at: 1      
+      # - sliding_window_moving_average:
+      #     window_size: 15
+      #     send_every: 15
+      #     send_first_at: 1      
+      - max:
+          window_size: 10
+          send_every: 10
 
   - platform: mpu6050
     address: 0x69
@@ -129,8 +138,10 @@ sensor:
       name: "Dryer Gyro Z"
       filters:
       - offset: 0.98 # Adjust this value as needed
+      
 
   - platform: template
+    id: dryer_combined_acceleration # Add an id here  
     name: "Dryer Combined Acceleration"
     unit_of_measurement: "m/s²"
     icon: "mdi:axis-arrow"
@@ -138,7 +149,65 @@ sensor:
       return sqrt(pow(id(dryer_accel_x).state, 2) + pow(id(dryer_accel_y).state, 2) + pow(id(dryer_accel_z).state, 2));
     update_interval: 1s
     filters:
-      - sliding_window_moving_average:
-          window_size: 15
-          send_every: 15
-          send_first_at: 1
+      # - sliding_window_moving_average:
+      #     window_size: 15
+      #     send_every: 15
+      #     send_first_at: 1
+      - max:
+          window_size: 10
+          send_every: 10
+
+
+
+binary_sensor:
+  - platform: template
+    name: "Dryer On"
+    device_class: running # Optional: for better representation in Home Assistant
+    lambda: |-
+      if (id(dryer_combined_acceleration).state >= 0.6) {
+        return true;
+      } else {
+        return false;
+      }
+    filters:
+      - delayed_on: 30s          
+
+  - platform: template
+    name: "Accel Flag 1"
+    id: washer_accel_flag_1
+    device_class: running # Optional
+    lambda: |-
+      if (id(washer_combined_acceleration).state >= 0.4) {
+        return true;
+      } else {
+        return false;
+      }
+    filters:
+      - delayed_on: 30s
+
+  - platform: template
+    name: "Gyro Flag 1"
+    id: washer_gyro_flag_1
+    device_class: running # Optional
+    lambda: |-
+      if (id(washer_combined_gyro).state >= 0.8) {
+        return true;
+      } else {
+        return false;
+      }
+    filters:
+      - delayed_on: 30s
+      
+  - platform: template
+    name: "Washer On"
+    device_class: running # Optional
+    lambda: |-
+      // Turn ON if either Accel Flag 1 OR Gyro Flag 1 is true
+      if (id(washer_accel_flag_1).state || id(washer_gyro_flag_1).state) {
+        return true;
+      } else {
+        return false;
+      }
+    filters:
+      - delayed_off: 4min # Keep ON unless both flags have been OFF for 4 minutes      
+

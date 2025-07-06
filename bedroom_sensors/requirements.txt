@@ -1,0 +1,7 @@
+paho.mqtt 
+numpy
+homeassistant-mqtt-binding
+adafruit-blinka
+adafruit-circuitpython-bmp3xx
+adafruit-circuitpython-sgp30
+gpiod
