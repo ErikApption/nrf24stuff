@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 # Installation: python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30 adafruit-circuitpython-dht
 import paho.mqtt.client as mqtt
+# potential better alternative https://pypi.org/project/ha-mqtt-discoverable/#sensor
 from ha_mqtt.mqtt_thermometer import MqttThermometer
 from ha_mqtt.mqtt_device_base import MqttDeviceSettings
 from ha_mqtt.ha_device import HaDevice
@@ -29,7 +30,9 @@ client.on_log = on_log
 # instantiate an MQTTThermometer object
 dev = HaDevice("Study AM2301", "StudyAM2301")
 th = MqttThermometer(MqttDeviceSettings("Study AM2301 Temperature", "StudyTemp",client,dev),"°C")
+th.start()
 hum = MqttThermometer(MqttDeviceSettings("Study AM2301 Humidity", "StudyHumidity",client,dev),"%")
+hum.start()
 #th = MqttThermometer("Study", "StudyTemp",client)
 
 # Initial the dht device, with data pin connected to:
@@ -67,6 +70,8 @@ for i in range(10):
         raise error
 
 print("stopping loop")
+th.stop()
+hum.stop()
 client.loop_stop()
 dhtDevice.exit()
 #th.close()
