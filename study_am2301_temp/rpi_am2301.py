@@ -70,8 +70,8 @@ for i in range(10):
         raise error
 
 print("stopping loop")
-th.stop()
-hum.stop()
+# th.stop()
+# hum.stop()
 client.loop_stop()
 dhtDevice.exit()
 #th.close()
