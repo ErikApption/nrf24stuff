@@ -96,7 +96,7 @@ void loop()
   digitalWrite(TS_PIN, HIGH); // sets the digital pin 13 on
   // for (int il = 0; il < 20;il++)
   //   delay(1000);
-  delay(1000);
+  delay(100);
 
   int radioReady = 1;
   int sensorReady = 1;
