@@ -20,6 +20,8 @@
 
 #define SLEEP_CYCLES_SUCCESS 75 // 75 = 10 minutes on success -
 #define SLEEP_CYCLES 10         // 80 seconds otherwise
+#define SENSOR_ERROR_TEMP -127.0  // Temperature value indicating sensor error
+#define CONVERSION_TIMEOUT 1000   // Timeout for sensor conversion in milliseconds
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensor(&oneWire);
@@ -96,95 +98,107 @@ void loop()
   digitalWrite(TS_PIN, HIGH); // sets the digital pin 13 on
   // for (int il = 0; il < 20;il++)
   //   delay(1000);
-  delay(100);
+  delay(1000);
 
   int radioReady = 1;
   int sensorReady = 1;
   int success = 0;
   // initialize the transceiver on the SPI bus
-  if (!radio.begin())
+
+  sensor.begin();
+  
+  // Check if DS18B20 sensor is connected
+  int deviceCount = sensor.getDeviceCount();
+  Debug(F("DS18B20 device count: "));
+  Debugln(deviceCount);
+  
+  if (deviceCount == 0) {
+    Debugln(F("ERROR: No DS18B20 sensor found! Check wiring and pull-up resistor."));
+    sensorReady = 0;
+    payload.temp = SENSOR_ERROR_TEMP;
+  } else {
+    Debugln(F("Requesting temperatures..."));
+    sensor.requestTemperatures();
+    
+    // Add timeout to prevent infinite loop
+    unsigned long conversionStart = millis();
+    bool conversionComplete = false;
+    
+    while (!sensor.isConversionComplete()) {
+      if (millis() - conversionStart > CONVERSION_TIMEOUT) {
+        Debugln(F("ERROR: DS18B20 conversion timeout! Sensor may be damaged or disconnected."));
+        sensorReady = 0;
+        conversionComplete = false;
+        break;
+      }
+      delay(10);  // Small delay to prevent tight loop
+    }
+    
+    if (sensorReady && sensor.isConversionComplete()) {
+      conversionComplete = true;
+      Debugln(F("Conversion complete, reading temperature..."));
+    }
+    
+    if (conversionComplete) {
+      payload.temp = sensor.getTempCByIndex(0);
+      
+      // Validate temperature reading (DS18B20 returns -127 or 85 on error)
+      if (payload.temp == SENSOR_ERROR_TEMP || payload.temp == 85.0 || 
+          payload.temp < -55.0 || payload.temp > 125.0) {
+        Debug(F("ERROR: Invalid temperature reading: "));
+        Debugln(payload.temp);
+        Debugln(F("This usually means sensor error or incorrect reading."));
+        sensorReady = 0;
+        payload.temp = SENSOR_ERROR_TEMP;
+      }
+    } else {
+      payload.temp = SENSOR_ERROR_TEMP;
+    }
+  }
+  
+  // payload.voltage = analogRead(A1);
+  payload.nodeID = NODE_ID;
+  Debug("Temp: ");
+  Debugln(payload.temp);
+  
+  if (!sensorReady) {
+    Debugln(F("WARNING: Proceeding with error temperature value"));
+  }
+
+  payload.payloadID = 0;
+  radio.powerUp();
+  unsigned long start_timer = micros();                       // start the timer
+  radio.writeBlocking(&payload, sizeof(payload), TX_TIMEOUT); // transmit & save the report
+  bool report = radio.txStandBy(TX_TIMEOUT);
+  Debugln("Payload size: ");
+  Debugln(sizeof(payload));
+  unsigned long end_timer = micros(); // end the timer
+
+  if (report)
   {
-    Debugln(F("radio hardware is not responding!!"));
-    radioReady = 0;
+    Debug(F("Transmission successful! ")); // payload was delivered
+    Debug(F("Time to transmit = "));
+    Debug(end_timer - start_timer); // print the timer result
+    Debug(F(" us. Sent: "));
+    Debugln(payload.temp); // print payload sent
+    success = 1;
   }
   else
   {
-
-    // role variable is hardcoded to RX behavior, inform the user of this
-    // Debugln(F("*** PRESS 'T' to begin transmitting to the other node"));
-    radio.setChannel(5);
-    // radio.setAutoAck(false); //https://github.com/nRF24/RF24/issues/685
-    //  Set the PA Level low to try preventing power supply related problems
-    //  because these examples are likely run with nodes in close proximity to
-    //  each other.
-    radio.setPALevel(RF24_PA_MAX); // RF24_PA_MAX is default.
-
-    // save on transmission time by setting the radio to only transmit the
-    // number of bytes we need to transmit a float
-    // radio.setPayloadSize(sizeof(payload)); // float datatype occupies 4 bytes
-    radio.enableDynamicPayloads();
-
-    // set the TX address of the RX node into the TX pipe
-    radio.openWritingPipe(nodes[NODE_ID]); // always uses pipe 0
-
-    // additional setup specific to the node's role
-    radio.stopListening(); // put radio in TX mode
-
-    // from https://nrf24.github.io/RF24/examples_2MulticeiverDemo_2MulticeiverDemo_8ino-example.html
-    radio.setRetries(((NODE_ID * 3) % 12) + 3, 15); // maximum value is 15 for both args
-    // For debugging info
-    // printf_begin();             // needed only once for printing details
-    // radio.printDetails();       // (smaller) function that prints raw register values
+    success = 0;
+    Debugln(F("Transmission failed or timed out")); // payload was not delivered
+    delay(1000);
     // radio.printPrettyDetails(); // (larger) function that prints human readable data
-
-    sensor.begin();
-
-    // This device is a TX node
-    sensor.requestTemperatures();
-    while (!sensor.isConversionComplete())
-      ; // wait until sensor is ready
-    payload.temp = sensor.getTempCByIndex(0);
-    // payload.voltage = analogRead(A1);
-    payload.nodeID = NODE_ID;
-    Debug("Temp: ");
-    Debugln(payload.temp);
-
-    payload.payloadID = 0;
-    radio.powerUp();
-    unsigned long start_timer = micros();                       // start the timer
-    radio.writeBlocking(&payload, sizeof(payload), TX_TIMEOUT); // transmit & save the report
-    bool report = radio.txStandBy(TX_TIMEOUT);
-    Debugln("Payload size: ");
-    Debugln(sizeof(payload));
-    unsigned long end_timer = micros(); // end the timer
-
-    if (report)
-    {
-      Debug(F("Transmission successful! ")); // payload was delivered
-      Debug(F("Time to transmit = "));
-      Debug(end_timer - start_timer); // print the timer result
-      Debug(F(" us. Sent: "));
-      Debugln(payload.temp); // print payload sent
-      success = 1;
-    }
-    else
-    {
-      success = 0;
-      Debugln(F("Transmission failed or timed out")); // payload was not delivered
-      delay(1000);
-      // radio.printPrettyDetails(); // (larger) function that prints human readable data
-    }
-
-    delay(100);
   }
 
-  radio.powerDown();
+  delay(100);
+
   digitalWrite(TS_PIN, LOW); // sets the digital pin 13 on
   delay(100);
 
   Debugln("Starting sleep");
 #ifdef DEBUG_MODE
-  int sleep_time = 0;
+  int sleep_time = SLEEP_CYCLES_SUCCESS;
 #else
   int sleep_time = (success == 1) ? SLEEP_CYCLES_SUCCESS : SLEEP_CYCLES;
 #endif
