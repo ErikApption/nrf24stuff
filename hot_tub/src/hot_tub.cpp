@@ -1,5 +1,5 @@
 #include <Arduino.h>
-//#define DEBUG_MODE
+#define DEBUG_MODE
 
 #include <SPI.h>
 #include "RF24.h"
