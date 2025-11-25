@@ -18,10 +18,10 @@
 
 #define TX_TIMEOUT 2000
 
-#define SLEEP_CYCLES_SUCCESS 75 // 75 = 10 minutes on success -
-#define SLEEP_CYCLES 10         // 80 seconds otherwise
-#define SENSOR_ERROR_TEMP -127.0  // Temperature value indicating sensor error
-#define CONVERSION_TIMEOUT 1000   // Timeout for sensor conversion in milliseconds
+#define SLEEP_CYCLES_SUCCESS 75  // 75 = 10 minutes on success -
+#define SLEEP_CYCLES 10          // 80 seconds otherwise
+#define SENSOR_ERROR_TEMP -127.0 // Temperature value indicating sensor error
+#define CONVERSION_TIMEOUT 1000  // Timeout for sensor conversion in milliseconds
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensor(&oneWire);
@@ -99,69 +99,116 @@ void loop()
   // for (int il = 0; il < 20;il++)
   //   delay(1000);
   delay(1000);
+  
+  // Verify OneWire pin configuration
+  Debug(F("OneWire bus pin: "));
+  Debugln(ONE_WIRE_BUS);
 
   int radioReady = 1;
   int sensorReady = 1;
   int success = 0;
   // initialize the transceiver on the SPI bus
 
-  sensor.begin();
+  // First, try a raw OneWire scan to see if any devices respond
+  Debugln(F("Scanning OneWire bus..."));
+  oneWire.reset_search();
+  uint8_t addr[8];
+  int foundDevices = 0;
   
+  while (oneWire.search(addr)) {
+    foundDevices++;
+    Debug(F("Found device #"));
+    Debug(foundDevices);
+    Debug(F(" with address: "));
+    for (int i = 0; i < 8; i++) {
+#ifdef DEBUG_MODE
+      if (addr[i] < 16) Serial.print("0");
+      Serial.print(addr[i], HEX);
+      if (i < 7) Serial.print(" ");
+#endif
+    }
+#ifdef DEBUG_MODE
+    Serial.println();
+#endif
+    
+    // Check CRC
+    if (OneWire::crc8(addr, 7) != addr[7]) {
+      Debugln(F("  CRC is not valid!"));
+    } else {
+      Debugln(F("  CRC is valid"));
+    }
+  }
+  
+  Debug(F("OneWire scan found "));
+  Debug(foundDevices);
+  Debugln(F(" device(s)"));
+  
+  // Now try DallasTemperature library
+  sensor.begin();
+
   // Check if DS18B20 sensor is connected
   int deviceCount = sensor.getDeviceCount();
   Debug(F("DS18B20 device count: "));
   Debugln(deviceCount);
-  
-  if (deviceCount == 0) {
+
+  if (deviceCount == 0)
+  {
     Debugln(F("ERROR: No DS18B20 sensor found! Check wiring and pull-up resistor."));
     sensorReady = 0;
     payload.temp = SENSOR_ERROR_TEMP;
-  } else {
-    Debugln(F("Requesting temperatures..."));
-    sensor.requestTemperatures();
-    
-    // Add timeout to prevent infinite loop
-    unsigned long conversionStart = millis();
-    bool conversionComplete = false;
-    
-    while (!sensor.isConversionComplete()) {
-      if (millis() - conversionStart > CONVERSION_TIMEOUT) {
-        Debugln(F("ERROR: DS18B20 conversion timeout! Sensor may be damaged or disconnected."));
-        sensorReady = 0;
-        conversionComplete = false;
-        break;
-      }
-      delay(10);  // Small delay to prevent tight loop
+  }
+  Debugln(F("Requesting temperatures..."));
+  sensor.requestTemperatures();
+
+  // Add timeout to prevent infinite loop
+  unsigned long conversionStart = millis();
+  bool conversionComplete = false;
+
+  while (!sensor.isConversionComplete())
+  {
+    if (millis() - conversionStart > CONVERSION_TIMEOUT)
+    {
+      Debugln(F("ERROR: DS18B20 conversion timeout! Sensor may be damaged or disconnected."));
+      sensorReady = 0;
+      conversionComplete = false;
+      break;
     }
-    
-    if (sensorReady && sensor.isConversionComplete()) {
-      conversionComplete = true;
-      Debugln(F("Conversion complete, reading temperature..."));
-    }
-    
-    if (conversionComplete) {
-      payload.temp = sensor.getTempCByIndex(0);
-      
-      // Validate temperature reading (DS18B20 returns -127 or 85 on error)
-      if (payload.temp == SENSOR_ERROR_TEMP || payload.temp == 85.0 || 
-          payload.temp < -55.0 || payload.temp > 125.0) {
-        Debug(F("ERROR: Invalid temperature reading: "));
-        Debugln(payload.temp);
-        Debugln(F("This usually means sensor error or incorrect reading."));
-        sensorReady = 0;
-        payload.temp = SENSOR_ERROR_TEMP;
-      }
-    } else {
+    delay(10); // Small delay to prevent tight loop
+  }
+
+  if (sensorReady && sensor.isConversionComplete())
+  {
+    conversionComplete = true;
+    Debugln(F("Conversion complete, reading temperature..."));
+  }
+
+  if (conversionComplete)
+  {
+    payload.temp = sensor.getTempCByIndex(0);
+
+    // Validate temperature reading (DS18B20 returns -127 or 85 on error)
+    if (payload.temp == SENSOR_ERROR_TEMP || payload.temp == 85.0 ||
+        payload.temp < -55.0 || payload.temp > 125.0)
+    {
+      Debug(F("ERROR: Invalid temperature reading: "));
+      Debugln(payload.temp);
+      Debugln(F("This usually means sensor error or incorrect reading."));
+      sensorReady = 0;
       payload.temp = SENSOR_ERROR_TEMP;
     }
   }
-  
+  else
+  {
+    payload.temp = SENSOR_ERROR_TEMP;
+  }
+
   // payload.voltage = analogRead(A1);
   payload.nodeID = NODE_ID;
   Debug("Temp: ");
   Debugln(payload.temp);
-  
-  if (!sensorReady) {
+
+  if (!sensorReady)
+  {
     Debugln(F("WARNING: Proceeding with error temperature value"));
   }
 
@@ -198,13 +245,14 @@ void loop()
 
   Debugln("Starting sleep");
 #ifdef DEBUG_MODE
-  int sleep_time = SLEEP_CYCLES_SUCCESS;
+  int sleep_time = 1;
+  for (int il = 0; il < sleep_time; il++)
+    delay(1000);
 #else
   int sleep_time = (success == 1) ? SLEEP_CYCLES_SUCCESS : SLEEP_CYCLES;
-#endif
-
   for (int il = 0; il < sleep_time; il++)
     LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
+#endif
 
   Debugln("Sleep completed");
   // to make this example readable in the serial monitor
