@@ -1,4 +1,4 @@
-homeassistant-mqtt-binding
+ha-mqtt-discoverable
 adafruit-circuitpython-bmp3xx
 adafruit-circuitpython-sgp30
 adafruit-circuitpython-dht
