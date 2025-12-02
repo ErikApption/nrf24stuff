@@ -1,0 +1,66 @@
+esphome:
+  name: fountain
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+# https://esphome.io/components/api.html to generate a new key
+api:
+  encryption:
+    key: "766tUhS1bFTCANIRm2rMuMYFOXVVaKVQXQ56EZEGPO0="
+
+# WiFi Status LED - replace GPIOX with your chosen pin
+status_led:
+  pin:
+    number: GPIO3 # Purple wire
+    inverted: false # Set to true if your LED is common anode
+
+ota:
+  - platform: esphome
+    password: "ftplants1181"
+
+wifi:
+  ssid: "GrenoblePirates-2G"
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Garden-Fountain"
+    password: "4yGQeAeRMDeX"
+
+captive_portal:
+
+output:
+  - platform: ledc # Yellow wire
+    id: motor_forward_pin # Pin connected to IN1 on L298N
+    pin: GPIO0
+  - platform: ledc # Orange wire
+    id: motor_reverse_pin # Pin connected to IN2 on L298N
+    pin: GPIO1
+  - platform: ledc # Green wire
+    id: enable_pin
+    pin: GPIO2    
+  - platform: gpio # Other green
+    pin: GPIO4
+    id: relay_1    
+
+# https://esphome.io/components/fan/hbridge.html    
+fan:
+  - platform: hbridge
+    id: fountain
+    name: "Garden Fountain"
+    pin_a: motor_forward_pin # Pin connected to IN1 on L298N
+    pin_b: motor_reverse_pin # Pin connected to IN2 on L298N
+    enable_pin: enable_pin # Pin connected to ENA on L298N (PWM pin for speed)
+    decay_mode: fast   # slow decay mode (coasting) or fast decay (braking).    
+
+switch:
+  - platform: output
+    name: "Fountain lights"
+    output: relay_1

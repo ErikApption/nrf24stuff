@@ -5,9 +5,10 @@
 # Installation: python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30 adafruit-circuitpython-dht
 import paho.mqtt.client as mqtt
 # potential better alternative https://pypi.org/project/ha-mqtt-discoverable/#sensor
-from ha_mqtt.mqtt_thermometer import MqttThermometer
+from ha_mqtt.mqtt_thermometer import MqttThermometer,MqttSensor
 from ha_mqtt.mqtt_device_base import MqttDeviceSettings
 from ha_mqtt.ha_device import HaDevice
+from ha_mqtt.util import HaSensorDeviceClass
 from adafruit_blinka.microcontroller.rockchip.rk3588 import pin
 import gpiod
 
@@ -31,7 +32,7 @@ client.on_log = on_log
 dev = HaDevice("Study AM2301", "StudyAM2301")
 th = MqttThermometer(MqttDeviceSettings("Study AM2301 Temperature", "StudyTemp",client,dev),"°C")
 th.start()
-hum = MqttThermometer(MqttDeviceSettings("Study AM2301 Humidity", "StudyHumidity",client,dev),"%")
+hum = MqttSensor(MqttDeviceSettings("Study AM2301 Humidity", "StudyHumidity",client,dev),HaSensorDeviceClass.HUMIDITY, "%", True)
 hum.start()
 #th = MqttThermometer("Study", "StudyTemp",client)
 

@@ -20,7 +20,7 @@ ota:
 
 wifi:
   ssid: "GrenoblePirates-2G"
-  password: "s4on3a93z"
+  password: !secret wifi_password
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:

@@ -1,5 +1,5 @@
 #include <Arduino.h>
-//#define DEBUG_MODE
+#define DEBUG_MODE
 
 #include <SPI.h>
 #include "RF24.h"
@@ -20,6 +20,7 @@
 
 #define SLEEP_CYCLES_SUCCESS 75  //75 = 10 minutes on success -
 #define SLEEP_CYCLES 10           //80 seconds otherwise
+#define SENSOR_ERROR_TEMP -127.0  // Temperature value indicating sensor error
 
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensor(&oneWire);
@@ -133,16 +134,52 @@ void loop() {
     //radio.printPrettyDetails(); // (larger) function that prints human readable data
 
     sensor.begin();
-
-    // This device is a TX node
-    sensor.requestTemperatures();
-    while (!sensor.isConversionComplete())
-      ;  // wait until sensor is ready
-    payload.temp = sensor.getTempCByIndex(0);
+    
+    // Check if DS18B20 sensor is connected
+    if (sensor.getDeviceCount() == 0) {
+      Debugln(F("DS18B20 sensor not found!"));
+      sensorReady = 0;
+      payload.temp = SENSOR_ERROR_TEMP;  // Set error value
+    } else {
+      Debug(F("DS18B20 sensor found, device count: "));
+      Debugln(sensor.getDeviceCount());
+      
+      // This device is a TX node
+      sensor.requestTemperatures();
+      
+      // Add timeout for conversion to prevent infinite loop
+      unsigned long conversionStart = millis();
+      while (!sensor.isConversionComplete()) {
+        if (millis() - conversionStart > 1000) {  // 1 second timeout
+          Debugln(F("DS18B20 conversion timeout!"));
+          sensorReady = 0;
+          break;
+        }
+      }
+      
+      if (sensorReady) {
+        payload.temp = sensor.getTempCByIndex(0);
+        
+        // Validate temperature reading (DS18B20 returns -127 on error)
+        if (payload.temp == SENSOR_ERROR_TEMP || payload.temp < -55.0 || payload.temp > 125.0) {
+          Debugln(F("DS18B20 invalid temperature reading!"));
+          sensorReady = 0;
+        }
+      }
+      
+      if (!sensorReady) {
+        payload.temp = SENSOR_ERROR_TEMP;  // Set error value
+      }
+    }
+    
     //payload.voltage = analogRead(A1);
     payload.nodeID = NODE_ID;
     Debug("Temp: ");
     Debugln(payload.temp);
+    
+    if (!sensorReady) {
+      Debugln(F("Warning: Proceeding with invalid sensor data"));
+    }
 
 
     payload.payloadID = 0;
