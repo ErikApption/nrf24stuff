@@ -10,6 +10,7 @@ import struct
 import datetime
 from paho.mqtt.client import Client
 import paho.mqtt.client as paho
+#should be https://pypi.org/project/ha-mqtt-discoverable/
 #python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30 gpiod
 from ha_mqtt.mqtt_thermometer import MqttThermometer
 from ha_mqtt.mqtt_sensor import MqttSensor
