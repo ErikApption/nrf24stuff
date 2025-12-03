@@ -34,13 +34,13 @@ mqtt_settings = Settings.MQTT(host="homeassistant.local", client=client)
 device = DeviceInfo(name="Study AM2301", identifiers="StudyAM2301")
 
 # Create temperature sensor
-temp_info = SensorInfo(name="Study AM2301 Temperature", unique_id="StudyTemp", 
+temp_info = SensorInfo(name="Study AM2301 Temperature", unique_id="study_am2301_temperature", 
                       device_class="temperature", unit_of_measurement="°C", device=device, state_class="measurement")
 temp_settings = Settings(mqtt=mqtt_settings, entity=temp_info)
 th = Sensor(temp_settings)
 
 # Create humidity sensor
-hum_info = SensorInfo(name="Study AM2301 Humidity", unique_id="StudyHumidity", 
+hum_info = SensorInfo(name="Study AM2301 Humidity", unique_id="study_am2301_humidity", 
                      device_class="humidity", unit_of_measurement="%", device=device, state_class="measurement")
 hum_settings = Settings(mqtt=mqtt_settings, entity=hum_info)
 hum = Sensor(hum_settings)

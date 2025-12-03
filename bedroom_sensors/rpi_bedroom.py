@@ -26,38 +26,33 @@ import adafruit_bmp3xx
 if __name__ == "__main__":
     #i2c_bus = busio.I2C() #board.SCL, board.SDA, frequency=100000
 
-    # instantiate an paho mqtt client and connect to the mqtt server
-    client = Client(paho.CallbackAPIVersion.VERSION2, "BedroomSensors")
-    client.connect("homeassistant.local", 1883)
-    client.loop_start()
-
     # Configure MQTT settings
-    mqtt_settings = Settings.MQTT(host="homeassistant.local", client=client)
+    mqtt_settings = Settings.MQTT(host="homeassistant.local")
 
     # Define devices
     device_bmp390 = DeviceInfo(name="Bedroom BMP390", identifiers="BedroomBMP390")
     device_sgp30 = DeviceInfo(name="Bedroom SGP30", identifiers="BedroomSGP30")
 
     # Create temperature sensor for BMP390
-    temp_info = SensorInfo(name="Bedroom BMP390", unique_id="BedroomTemp", 
+    temp_info = SensorInfo(name="Temperature", unique_id="temperature", 
                           device_class="temperature", unit_of_measurement="°C", device=device_bmp390, state_class="measurement")
     temp_settings = Settings(mqtt=mqtt_settings, entity=temp_info)
     th = Sensor(temp_settings)
 
     # Create pressure sensor for BMP390
-    pres_info = SensorInfo(name="Bedroom BMP390 Pressure", unique_id="BedroomPressure", 
+    pres_info = SensorInfo(name="Pressure", unique_id="pressure", 
                           device_class="pressure", unit_of_measurement="hPa", device=device_bmp390, state_class="measurement")
     pres_settings = Settings(mqtt=mqtt_settings, entity=pres_info)
     pres = Sensor(pres_settings)
 
     # Create CO2 sensor for SGP30
-    co2_info = SensorInfo(name="Bedroom eCO2", unique_id="Bedroom_eCO2", 
+    co2_info = SensorInfo(name="Bedroom eCO2", unique_id="bedroom_sgp30_eco2", 
                          unit_of_measurement="ppm", device=device_sgp30)
     co2_settings = Settings(mqtt=mqtt_settings, entity=co2_info)
     co2 = Sensor(co2_settings)
 
     # Create TVOC sensor for SGP30
-    tvoc_info = SensorInfo(name="Bedroom TVOC", unique_id="Bedroom_TVOC", 
+    tvoc_info = SensorInfo(name="Bedroom TVOC", unique_id="bedroom_sgp30_tvoc", 
                           unit_of_measurement="ppb", device=device_sgp30)
     tvoc_settings = Settings(mqtt=mqtt_settings, entity=tvoc_info)
     tvoc = Sensor(tvoc_settings)    
@@ -79,10 +74,8 @@ if __name__ == "__main__":
         )        
         if not dataError:
             co2.set_state(round(eCO2, 2))
-            tvoc.set_state(round(TVOC, 2))
-            client.publish("Bedroom/SGP30/CO2",eCO2)
-            client.publish("Bedroom/SGP30/TVOC",TVOC)         
-            print("published SGP30 data")
+            tvoc.set_state(round(TVOC, 2))        
+            print(f"published SGP30 data eCO2: {eCO2} TVOC: {TVOC}")
 
     dataError = True
 
@@ -100,14 +93,7 @@ if __name__ == "__main__":
         print("temp=",bmp.temperature," pressure",bmp.pressure," dataError=",dataError)
         if not dataError:
             th.set_state(round(bmp.temperature, 2))
-            pres.set_state(round(bmp.pressure, 4))
-            client.publish("Bedroom/BME280/Temperature",bmp.temperature)
-            client.publish("Bedroom/BME280/Pressure",bmp.pressure)            
+            pres.set_state(round(bmp.pressure, 4))      
             print("published BMP390 data")
 
-    print("stopping loop")
-    client.loop_stop()
-    #th.close()
-    #hum.close()
-    client.disconnect()
     print("closed connection")
