@@ -47,13 +47,13 @@ if __name__ == "__main__":
 
     # Create CO2 sensor for SGP30
     co2_info = SensorInfo(name="Bedroom eCO2", unique_id="bedroom_sgp30_eco2", 
-                         unit_of_measurement="ppm", device=device_sgp30)
+                         device_class="carbon_dioxide", unit_of_measurement="ppm", device=device_sgp30, state_class="measurement")
     co2_settings = Settings(mqtt=mqtt_settings, entity=co2_info)
     co2 = Sensor(co2_settings)
 
     # Create TVOC sensor for SGP30
     tvoc_info = SensorInfo(name="Bedroom TVOC", unique_id="bedroom_sgp30_tvoc", 
-                          unit_of_measurement="ppb", device=device_sgp30)
+                          device_class="volatile_organic_compounds", unit_of_measurement="ppb", device=device_sgp30, state_class="measurement")
     tvoc_settings = Settings(mqtt=mqtt_settings, entity=tvoc_info)
     tvoc = Sensor(tvoc_settings)    
     # good for RPI
