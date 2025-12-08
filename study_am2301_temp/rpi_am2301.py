@@ -5,10 +5,8 @@
 # Installation: python3 -m pip install homeassistant-mqtt-binding adafruit-circuitpython-bmp3xx adafruit-circuitpython-sgp30 adafruit-circuitpython-dht
 import paho.mqtt.client as mqtt
 # potential better alternative https://pypi.org/project/ha-mqtt-discoverable/#sensor
-from ha_mqtt.mqtt_thermometer import MqttThermometer,MqttSensor
-from ha_mqtt.mqtt_device_base import MqttDeviceSettings
-from ha_mqtt.ha_device import HaDevice
-from ha_mqtt.util import HaSensorDeviceClass
+from ha_mqtt_discoverable import Settings, DeviceInfo
+from ha_mqtt_discoverable.sensors import Sensor, SensorInfo
 from adafruit_blinka.microcontroller.rockchip.rk3588 import pin
 import gpiod
 
@@ -28,13 +26,24 @@ client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,"StudyRPi")
 client.connect("homeassistant.local", 1883)
 # client.loop_start()
 client.on_log = on_log
-# instantiate an MQTTThermometer object
-dev = HaDevice("Study AM2301", "StudyAM2301")
-th = MqttThermometer(MqttDeviceSettings("Study AM2301 Temperature", "StudyTemp",client,dev),"°C")
-th.start()
-hum = MqttSensor(MqttDeviceSettings("Study AM2301 Humidity", "StudyHumidity",client,dev),HaSensorDeviceClass.HUMIDITY, "%", True)
-hum.start()
-#th = MqttThermometer("Study", "StudyTemp",client)
+
+# Configure MQTT settings
+mqtt_settings = Settings.MQTT(host="homeassistant.local", client=client)
+
+# Define device
+device = DeviceInfo(name="Study AM2301", identifiers="StudyAM2301")
+
+# Create temperature sensor
+temp_info = SensorInfo(name="Study AM2301 Temperature", unique_id="study_am2301_temperature", 
+                      device_class="temperature", unit_of_measurement="°C", device=device, state_class="measurement")
+temp_settings = Settings(mqtt=mqtt_settings, entity=temp_info)
+th = Sensor(temp_settings)
+
+# Create humidity sensor
+hum_info = SensorInfo(name="Study AM2301 Humidity", unique_id="study_am2301_humidity", 
+                     device_class="humidity", unit_of_measurement="%", device=device, state_class="measurement")
+hum_settings = Settings(mqtt=mqtt_settings, entity=hum_info)
+hum = Sensor(hum_settings)
 
 # Initial the dht device, with data pin connected to:
 # D15
@@ -52,8 +61,8 @@ for i in range(10):
         humidity = dhtDevice.humidity
         temp = f"{temperature_c:2.2f}"
         print(f"publishing temperature: {temp}")
-        th.update_state(temp)
-        hum.update_state(humidity)
+        th.set_state(temp)
+        hum.set_state(humidity)
         success = True
         print(
             "[{}] Published Temp: {}    Humidity: {}".format(datetime.datetime.now(),temp, humidity)

@@ -1,6 +1,6 @@
 paho.mqtt 
 numpy
-homeassistant-mqtt-binding
+ha-mqtt-discoverable
 adafruit-blinka
 adafruit-circuitpython-bmp3xx
 adafruit-circuitpython-sgp30

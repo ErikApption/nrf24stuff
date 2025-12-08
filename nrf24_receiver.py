@@ -215,7 +215,11 @@ def process_payload2(pipe_number,buffer):
         TryPublish(node_roots[nodeID] +
                     "/Arduino/Voltage", voltage, qos, retain)
 
-        if (nodeID == 0 or nodeID == 2):
+        # Check for sensor error (-127.0 indicates DS18B20 sensor error)
+        if temp == -127.0:
+            logging.warning("{} {} Sensor error detected - temperature reading: -127.0 (skipping temperature publish)".format(
+                str(datetime.datetime.now()), pipe_number))
+        elif (nodeID == 0 or nodeID == 2):
             TryPublish(
                 node_roots[nodeID] + "/DS18B20/Temperature", temp, qos, retain)
         elif nodeID == 1:
