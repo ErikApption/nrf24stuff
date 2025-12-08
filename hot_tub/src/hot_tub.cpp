@@ -259,7 +259,8 @@ void loop()
 #else
   int sleep_time = (success == 1) ? SLEEP_CYCLES_SUCCESS : SLEEP_CYCLES;
   for (int il = 0; il < sleep_time; il++)
-    LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
+    //LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
+    LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_ON); // Try BOD_ON instead of BOD_OFF. On some clones/bootloaders the BOD-off sequence is flaky and the MCU never leaves sleep.
 #endif
 
   Debugln("Sleep completed");
