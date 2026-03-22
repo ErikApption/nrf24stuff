@@ -1,3 +1,8 @@
+substitutions:
+  # Set to "true" to hide all debug metrics from Home Assistant.
+  # Set to "false" to expose debug metrics for tuning.
+  debug_metrics_internal: "true"
+
 esphome:
   name: washer
 
@@ -43,6 +48,18 @@ globals:
     type: float
     restore_value: no
     initial_value: '0.0'
+  - id: dryer_coupling_compensation_factor
+    type: float
+    restore_value: yes
+    initial_value: '0.75'
+  - id: washer_micro_effective_trigger
+    type: float
+    restore_value: yes
+    initial_value: '0.30'
+  - id: washer_large_vibration_trigger
+    type: float
+    restore_value: yes
+    initial_value: '0.80'
   - id: dryer_accel_baseline
     type: float
     restore_value: no
@@ -51,6 +68,26 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+  - id: dryer_cycle_started
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: washer_cycle_started
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: dryer_cycle_start_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: washer_cycle_start_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: washer_last_activity_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
 
 interval:
   - interval: 1s
@@ -58,12 +95,12 @@ interval:
       - lambda: |-
           const float alpha = 0.03f;
 
-          if (!id(washer_combined_acceleration).has_state() || !id(dryer_combined_acceleration).has_state()) {
+          if (!id(washer_combined_acceleration_raw).has_state() || !id(dryer_combined_acceleration_raw).has_state()) {
             return;
           }
 
-          const float w = id(washer_combined_acceleration).state;
-          const float d = id(dryer_combined_acceleration).state;
+          const float w = id(washer_combined_acceleration_raw).state;
+          const float d = id(dryer_combined_acceleration_raw).state;
 
           if (isnan(w) || isnan(d)) {
             return;
@@ -76,12 +113,14 @@ interval:
             return;
           }
 
-          // Learn baseline only when both machines are currently considered off.
+          // Learn each baseline independently when that machine is off.
           const bool washer_on = id(washer_on_sensor).has_state() && id(washer_on_sensor).state;
           const bool dryer_on = id(dryer_on_sensor).has_state() && id(dryer_on_sensor).state;
 
-          if (!washer_on && !dryer_on) {
+          if (!washer_on) {
             id(washer_accel_baseline) = id(washer_accel_baseline) * (1.0f - alpha) + w * alpha;
+          }
+          if (!dryer_on) {
             id(dryer_accel_baseline) = id(dryer_accel_baseline) * (1.0f - alpha) + d * alpha;
           }
 
@@ -145,6 +184,16 @@ sensor:
 
 
   - platform: template
+    id: washer_combined_acceleration_raw
+    name: "Washer Combined Acceleration Raw"
+    internal: true
+    unit_of_measurement: "m/s²"
+    icon: "mdi:axis-arrow"
+    lambda: |-
+      return sqrt(pow(id(washer_accel_x).state, 2) + pow(id(washer_accel_y).state, 2) + pow(id(washer_accel_z).state, 2));
+    update_interval: 1s
+
+  - platform: template
     name: "Washer Combined Acceleration"
     id: washer_combined_acceleration # Add an id here if it doesn't have one
     unit_of_measurement: "m/s²"
@@ -200,6 +249,16 @@ sensor:
       
 
   - platform: template
+    id: dryer_combined_acceleration_raw
+    name: "Dryer Combined Acceleration Raw"
+    internal: true
+    unit_of_measurement: "m/s²"
+    icon: "mdi:axis-arrow"
+    lambda: |-
+      return sqrt(pow(id(dryer_accel_x).state, 2) + pow(id(dryer_accel_y).state, 2) + pow(id(dryer_accel_z).state, 2));
+    update_interval: 1s
+
+  - platform: template
     id: dryer_combined_acceleration # Add an id here  
     name: "Dryer Combined Acceleration"
     unit_of_measurement: "m/s²"
@@ -222,13 +281,13 @@ sensor:
     unit_of_measurement: "m/s²"
     icon: "mdi:vibrate-off"
     lambda: |-
-      if (!id(washer_combined_acceleration).has_state()) {
+      if (!id(washer_combined_acceleration_raw).has_state()) {
         return 0.0f;
       }
       if (isnan(id(washer_accel_baseline))) {
         return 0.0f;
       }
-      const float delta = id(washer_combined_acceleration).state - id(washer_accel_baseline);
+      const float delta = id(washer_combined_acceleration_raw).state - id(washer_accel_baseline);
       return delta > 0.0f ? delta : 0.0f;
     update_interval: 1s
     filters:
@@ -242,13 +301,13 @@ sensor:
     unit_of_measurement: "m/s²"
     icon: "mdi:vibrate"
     lambda: |-
-      if (!id(washer_combined_acceleration).has_state()) {
+      if (!id(washer_combined_acceleration_raw).has_state()) {
         return 0.0f;
       }
       if (isnan(id(washer_accel_baseline))) {
         return 0.0f;
       }
-      const float delta = id(washer_combined_acceleration).state - id(washer_accel_baseline);
+      const float delta = id(washer_combined_acceleration_raw).state - id(washer_accel_baseline);
       return delta > 0.0f ? delta : 0.0f;
     update_interval: 1s
     filters:
@@ -262,13 +321,13 @@ sensor:
     unit_of_measurement: "m/s²"
     icon: "mdi:vibrate-off"
     lambda: |-
-      if (!id(dryer_combined_acceleration).has_state()) {
+      if (!id(dryer_combined_acceleration_raw).has_state()) {
         return 0.0f;
       }
       if (isnan(id(dryer_accel_baseline))) {
         return 0.0f;
       }
-      const float delta = id(dryer_combined_acceleration).state - id(dryer_accel_baseline);
+      const float delta = id(dryer_combined_acceleration_raw).state - id(dryer_accel_baseline);
       return delta > 0.0f ? delta : 0.0f;
     update_interval: 1s
     filters:
@@ -282,19 +341,117 @@ sensor:
     unit_of_measurement: "m/s²"
     icon: "mdi:vibrate"
     lambda: |-
-      if (!id(dryer_combined_acceleration).has_state()) {
+      if (!id(dryer_combined_acceleration_raw).has_state()) {
         return 0.0f;
       }
       if (isnan(id(dryer_accel_baseline))) {
         return 0.0f;
       }
-      const float delta = id(dryer_combined_acceleration).state - id(dryer_accel_baseline);
+      const float delta = id(dryer_combined_acceleration_raw).state - id(dryer_accel_baseline);
       return delta > 0.0f ? delta : 0.0f;
     update_interval: 1s
     filters:
       - max:
           window_size: 10
           send_every: 10
+
+  - platform: template
+    id: debug_washer_dryer_coupling_subtraction
+    name: "Debug Washer Dryer Coupling Subtraction"
+    internal: ${debug_metrics_internal}
+    disabled_by_default: false
+    entity_category: diagnostic
+    unit_of_measurement: "m/s²"
+    icon: "mdi:minus-circle-outline"
+    lambda: |-
+      if (!id(dryer_micro_vibrations).has_state()) {
+        return 0.0f;
+      }
+      return id(dryer_micro_vibrations).state * id(dryer_coupling_compensation_factor);
+    update_interval: 1s
+
+  - platform: template
+    id: debug_washer_micro_vibration_effective
+    name: "Debug Washer Micro Vibration Effective"
+    internal: ${debug_metrics_internal}
+    disabled_by_default: false
+    entity_category: diagnostic
+    unit_of_measurement: "m/s²"
+    icon: "mdi:tune-variant"
+    lambda: |-
+      if (!id(washer_micro_vibrations).has_state() || !id(dryer_micro_vibrations).has_state()) {
+        return 0.0f;
+      }
+      const float wm = id(washer_micro_vibrations).state;
+      const float dm = id(dryer_micro_vibrations).state;
+      const float wm_comp = wm - (dm * id(dryer_coupling_compensation_factor));
+      return wm_comp > 0.0f ? wm_comp : 0.0f;
+    update_interval: 1s
+
+  - platform: template
+    id: debug_washer_micro_trigger_margin
+    name: "Debug Washer Micro Trigger Margin"
+    internal: ${debug_metrics_internal}
+    disabled_by_default: false
+    entity_category: diagnostic
+    unit_of_measurement: "m/s²"
+    icon: "mdi:chart-line-variant"
+    lambda: |-
+      if (!id(debug_washer_micro_vibration_effective).has_state()) {
+        return 0.0f;
+      }
+      return id(debug_washer_micro_vibration_effective).state - id(washer_micro_effective_trigger);
+    update_interval: 1s
+
+  - platform: template
+    id: debug_washer_large_trigger_margin
+    name: "Debug Washer Large Trigger Margin"
+    internal: ${debug_metrics_internal}
+    disabled_by_default: false
+    entity_category: diagnostic
+    unit_of_measurement: "m/s²"
+    icon: "mdi:chart-line-variant"
+    lambda: |-
+      if (!id(washer_large_vibrations).has_state()) {
+        return 0.0f;
+      }
+      return id(washer_large_vibrations).state - id(washer_large_vibration_trigger);
+    update_interval: 1s
+
+  - platform: template
+    id: debug_washer_tuning_compensation_factor_sensor
+    name: "Debug Washer Tuning Compensation Factor"
+    internal: ${debug_metrics_internal}
+    disabled_by_default: false
+    entity_category: diagnostic
+    icon: "mdi:knob"
+    lambda: |-
+      return id(dryer_coupling_compensation_factor);
+    update_interval: 10s
+
+  - platform: template
+    id: debug_washer_tuning_micro_trigger_sensor
+    name: "Debug Washer Tuning Micro Trigger"
+    internal: ${debug_metrics_internal}
+    disabled_by_default: false
+    entity_category: diagnostic
+    unit_of_measurement: "m/s²"
+    icon: "mdi:knob"
+    lambda: |-
+      return id(washer_micro_effective_trigger);
+    update_interval: 10s
+
+  - platform: template
+    id: debug_washer_tuning_large_trigger_sensor
+    name: "Debug Washer Tuning Large Trigger"
+    internal: ${debug_metrics_internal}
+    disabled_by_default: false
+    entity_category: diagnostic
+    unit_of_measurement: "m/s²"
+    icon: "mdi:knob"
+    lambda: |-
+      return id(washer_large_vibration_trigger);
+    update_interval: 10s
 
   - platform: template
     id: washer_accel_baseline_sensor
@@ -326,9 +483,12 @@ binary_sensor:
   - platform: template
     name: "Dryer On"
     id: dryer_on_sensor
-    publish_initial_state: true
+    trigger_on_initial_state: true
     device_class: running # Optional: for better representation in Home Assistant
     lambda: |-
+      const uint32_t min_cycle_ms = 20UL * 60UL * 1000UL;
+      const uint32_t now = millis();
+
       if (!id(dryer_large_vibrations).has_state() || !id(dryer_micro_vibrations).has_state() ||
           !id(washer_large_vibrations).has_state() || !id(washer_micro_vibrations).has_state()) {
         return false;
@@ -340,22 +500,36 @@ binary_sensor:
       const float wm = id(washer_micro_vibrations).state;
 
       // Suppress dryer ON when washer clearly dominates the shared vibration.
-      if (wl >= 0.8f && wm >= 0.45f && wl > (dl * 1.2f)) {
-        return false;
+      const bool coupled_from_washer = (wl >= 0.8f && wm >= 0.45f && wl > (dl * 1.2f));
+      const bool strong_start = (dl >= 0.9f && dm >= 0.5f) && !coupled_from_washer;
+
+      if (!id(dryer_cycle_started) && strong_start) {
+        id(dryer_cycle_started) = true;
+        id(dryer_cycle_start_ms) = now;
       }
 
-      if (dl >= 0.9f && dm >= 0.5f) {
+      if (id(dryer_cycle_started)) {
+        if ((uint32_t) (now - id(dryer_cycle_start_ms)) < min_cycle_ms) {
+          return true;
+        }
+        if (!strong_start) {
+          id(dryer_cycle_started) = false;
+        }
+      }
+
+      if (strong_start) {
         return true;
       } else {
         return false;
       }
     filters:
-      - delayed_on: 30s          
+      - delayed_on: 30s
+      - delayed_off: 2min          
 
   - platform: template
     name: "Accel Flag 1"
     id: washer_accel_flag_1
-    publish_initial_state: true
+    trigger_on_initial_state: true
     device_class: running # Optional
     lambda: |-
       if (!id(washer_large_vibrations).has_state() || !id(washer_micro_vibrations).has_state() ||
@@ -367,13 +541,16 @@ binary_sensor:
       const float wm = id(washer_micro_vibrations).state;
       const float dl = id(dryer_large_vibrations).state;
       const float dm = id(dryer_micro_vibrations).state;
+      // Remove shared vibration from dryer before checking washer micro activity.
+      const float wm_comp = wm - (dm * id(dryer_coupling_compensation_factor));
+      const float wm_effective = wm_comp > 0.0f ? wm_comp : 0.0f;
 
       // Suppress washer accel flag when dryer clearly dominates shared vibration.
       if (dl >= 0.9f && dm >= 0.5f && dl > (wl * 1.2f)) {
         return false;
       }
 
-      if (wl >= 0.8f && wm >= 0.45f) {
+      if (wl >= id(washer_large_vibration_trigger) && wm_effective >= id(washer_micro_effective_trigger)) {
         return true;
       } else {
         return false;
@@ -384,7 +561,7 @@ binary_sensor:
   - platform: template
     name: "Gyro Flag 1"
     id: washer_gyro_flag_1
-    publish_initial_state: true
+    trigger_on_initial_state: true
     device_class: running # Optional
     lambda: |-
       if (!id(washer_large_vibrations).has_state() || !id(dryer_large_vibrations).has_state() || !id(dryer_micro_vibrations).has_state() || !id(washer_combined_gyro).has_state()) {
@@ -410,14 +587,47 @@ binary_sensor:
   - platform: template
     name: "Washer On"
     id: washer_on_sensor
-    publish_initial_state: true
+    trigger_on_initial_state: true
     device_class: running # Optional
     lambda: |-
+      const uint32_t min_cycle_ms = 20UL * 60UL * 1000UL;
+      const uint32_t inter_phase_hold_ms = 8UL * 60UL * 1000UL;
+      const uint32_t now = millis();
+
       if (!id(washer_accel_flag_1).has_state() || !id(washer_gyro_flag_1).has_state()) {
         return false;
       }
+
+      const float wm = id(washer_micro_vibrations).has_state() ? id(washer_micro_vibrations).state : 0.0f;
+      const float wl = id(washer_large_vibrations).has_state() ? id(washer_large_vibrations).state : 0.0f;
+      const float wg = id(washer_combined_gyro).has_state() ? id(washer_combined_gyro).state : 0.0f;
+      const bool weak_activity = (wm >= 0.12f) || (wl >= 0.20f) || (wg >= 0.35f);
+
+      const bool strong_start = id(washer_accel_flag_1).state || id(washer_gyro_flag_1).state;
+
+      if (strong_start || weak_activity) {
+        id(washer_last_activity_ms) = now;
+      }
+
+      if (!id(washer_cycle_started) && strong_start) {
+        id(washer_cycle_started) = true;
+        id(washer_cycle_start_ms) = now;
+        id(washer_last_activity_ms) = now;
+      }
+
+      if (id(washer_cycle_started)) {
+        if ((uint32_t) (now - id(washer_cycle_start_ms)) < min_cycle_ms) {
+          return true;
+        }
+        if ((uint32_t) (now - id(washer_last_activity_ms)) < inter_phase_hold_ms) {
+          return true;
+        }
+
+        id(washer_cycle_started) = false;
+      }
+
       // Turn ON if either Accel Flag 1 OR Gyro Flag 1 is true
-      if (id(washer_accel_flag_1).state || id(washer_gyro_flag_1).state) {
+      if (strong_start) {
         return true;
       } else {
         return false;
