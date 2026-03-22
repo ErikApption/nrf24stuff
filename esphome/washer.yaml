@@ -80,6 +80,10 @@ globals:
     type: uint32_t
     restore_value: no
     initial_value: '0'
+  - id: dryer_start_candidate_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
   - id: washer_cycle_start_ms
     type: uint32_t
     restore_value: no
@@ -116,11 +120,12 @@ interval:
           // Learn each baseline independently when that machine is off.
           const bool washer_on = id(washer_on_sensor).has_state() && id(washer_on_sensor).state;
           const bool dryer_on = id(dryer_on_sensor).has_state() && id(dryer_on_sensor).state;
+          const bool dryer_dynamic = id(dryer_combined_gyro).has_state() && id(dryer_combined_gyro).state >= 0.9f;
 
           if (!washer_on) {
             id(washer_accel_baseline) = id(washer_accel_baseline) * (1.0f - alpha) + w * alpha;
           }
-          if (!dryer_on) {
+          if (!dryer_on && !dryer_dynamic) {
             id(dryer_accel_baseline) = id(dryer_accel_baseline) * (1.0f - alpha) + d * alpha;
           }
 
@@ -232,20 +237,37 @@ sensor:
       filters:
       - offset: 0.27 # Adjust this value as needed
     gyro_x:
+      id: dryer_gyro_x
       name: "Dryer Gyro X"
       internal: true
       filters:
       - offset: -3.17 # Adjust this value as needed
     gyro_y:
+      id: dryer_gyro_y
       name: "Dryer Gyro Y"
       internal: true
       filters:
       - offset: 0.12 # Adjust this value as needed
     gyro_z:
+      id: dryer_gyro_z
       name: "Dryer Gyro Z"
       internal: true
       filters:
       - offset: 0.98 # Adjust this value as needed
+
+  - platform: template
+    id: dryer_combined_gyro
+    name: "Dryer Combined Gyro"
+    internal: true
+    unit_of_measurement: "°/s"
+    icon: "mdi:rotate-3d-variant"
+    lambda: |-
+      return abs(id(dryer_gyro_x).state) + abs(id(dryer_gyro_y).state) + abs(id(dryer_gyro_z).state);
+    update_interval: 1s
+    filters:
+      - max:
+          window_size: 5
+          send_every: 5
       
 
   - platform: template
@@ -487,10 +509,15 @@ binary_sensor:
     device_class: running # Optional: for better representation in Home Assistant
     lambda: |-
       const uint32_t min_cycle_ms = 20UL * 60UL * 1000UL;
+      const uint32_t start_confirm_ms = 30UL * 1000UL;
       const uint32_t now = millis();
+      const float DRYER_ACCEL_LARGE_TRIGGER = 0.25f;
+      const float DRYER_ACCEL_MICRO_TRIGGER = 0.10f;
+      const float DRYER_GYRO_TRIGGER = 1.40f;
 
       if (!id(dryer_large_vibrations).has_state() || !id(dryer_micro_vibrations).has_state() ||
-          !id(washer_large_vibrations).has_state() || !id(washer_micro_vibrations).has_state()) {
+          !id(washer_large_vibrations).has_state() || !id(washer_micro_vibrations).has_state() ||
+          !id(dryer_combined_gyro).has_state()) {
         return false;
       }
 
@@ -498,12 +525,27 @@ binary_sensor:
       const float dm = id(dryer_micro_vibrations).state;
       const float wl = id(washer_large_vibrations).state;
       const float wm = id(washer_micro_vibrations).state;
+      const float dg = id(dryer_combined_gyro).state;
 
       // Suppress dryer ON when washer clearly dominates the shared vibration.
       const bool coupled_from_washer = (wl >= 0.8f && wm >= 0.45f && wl > (dl * 1.2f));
-      const bool strong_start = (dl >= 0.9f && dm >= 0.5f) && !coupled_from_washer;
+      const bool strong_accel = (dl >= DRYER_ACCEL_LARGE_TRIGGER && dm >= DRYER_ACCEL_MICRO_TRIGGER);
+      const bool strong_gyro = (dg >= DRYER_GYRO_TRIGGER && dm >= 0.05f);
+      const bool strong_start = (strong_accel || strong_gyro) && !coupled_from_washer;
 
-      if (!id(dryer_cycle_started) && strong_start) {
+      if (strong_start) {
+        if (id(dryer_start_candidate_ms) == 0) {
+          id(dryer_start_candidate_ms) = now;
+        }
+      } else {
+        id(dryer_start_candidate_ms) = 0;
+      }
+
+      const bool confirmed_start =
+          (id(dryer_start_candidate_ms) != 0) &&
+          ((uint32_t) (now - id(dryer_start_candidate_ms)) >= start_confirm_ms);
+
+      if (!id(dryer_cycle_started) && confirmed_start) {
         id(dryer_cycle_started) = true;
         id(dryer_cycle_start_ms) = now;
       }
@@ -564,19 +606,29 @@ binary_sensor:
     trigger_on_initial_state: true
     device_class: running # Optional
     lambda: |-
-      if (!id(washer_large_vibrations).has_state() || !id(dryer_large_vibrations).has_state() || !id(dryer_micro_vibrations).has_state() || !id(washer_combined_gyro).has_state()) {
+      const float WASHER_GYRO_TRIGGER = 1.20f;
+      const float WASHER_EFFECTIVE_MICRO_FOR_GYRO = 0.06f;
+
+      if (!id(washer_large_vibrations).has_state() || !id(washer_micro_vibrations).has_state() ||
+          !id(dryer_large_vibrations).has_state() || !id(dryer_micro_vibrations).has_state() ||
+          !id(washer_combined_gyro).has_state()) {
         return false;
       }
+
       const float wl = id(washer_large_vibrations).state;
+      const float wm = id(washer_micro_vibrations).state;
       const float dl = id(dryer_large_vibrations).state;
       const float dm = id(dryer_micro_vibrations).state;
+      const float wm_comp = wm - (dm * id(dryer_coupling_compensation_factor));
+      const float wm_effective = wm_comp > 0.0f ? wm_comp : 0.0f;
 
       // Suppress washer gyro flag when dryer clearly dominates shared vibration.
       if (dl >= 0.9f && dm >= 0.5f && dl > (wl * 1.2f)) {
         return false;
       }
 
-      if (id(washer_combined_gyro).state >= 0.8f) {
+      // Require both gyro and a little washer-specific vibration to avoid dryer-only coupling false positives.
+      if (id(washer_combined_gyro).state >= WASHER_GYRO_TRIGGER && wm_effective >= WASHER_EFFECTIVE_MICRO_FOR_GYRO) {
         return true;
       } else {
         return false;
@@ -599,11 +651,14 @@ binary_sensor:
       }
 
       const float wm = id(washer_micro_vibrations).has_state() ? id(washer_micro_vibrations).state : 0.0f;
+      const float dm = id(dryer_micro_vibrations).has_state() ? id(dryer_micro_vibrations).state : 0.0f;
       const float wl = id(washer_large_vibrations).has_state() ? id(washer_large_vibrations).state : 0.0f;
       const float wg = id(washer_combined_gyro).has_state() ? id(washer_combined_gyro).state : 0.0f;
+      const float wm_comp = wm - (dm * id(dryer_coupling_compensation_factor));
+      const float wm_effective = wm_comp > 0.0f ? wm_comp : 0.0f;
       const bool weak_activity = (wm >= 0.12f) || (wl >= 0.20f) || (wg >= 0.35f);
 
-      const bool strong_start = id(washer_accel_flag_1).state || id(washer_gyro_flag_1).state;
+      const bool strong_start = id(washer_accel_flag_1).state || (id(washer_gyro_flag_1).state && wm_effective >= 0.06f);
 
       if (strong_start || weak_activity) {
         id(washer_last_activity_ms) = now;
