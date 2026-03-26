@@ -50,6 +50,10 @@ Improve washer and dryer run detection accuracy with two MPU6050 sensors while r
 - Result: Current direction.
 - Reason: Requires sustained evidence before latching, reducing false starts.
 
+### 10. Washer hold refresh changed to washer-specific activity
+- Result: Worked (fix for washer staying ON too long).
+- Reason: Previous weak-activity refresh used permissive raw motion signals, so background/dryer-coupled vibration could continuously extend washer ON time. Refresh now prefers compensated washer activity and blocks refresh while dryer clearly dominates.
+
 ## Key Tunables
 
 - `dryer_coupling_compensation_factor`
@@ -59,9 +63,12 @@ Improve washer and dryer run detection accuracy with two MPU6050 sensors while r
 - Dryer gyro trigger
 - Dryer start confirmation duration
 - Washer gyro trigger and washer effective micro gate (gyro path)
+- Washer weak-activity refresh thresholds (`wm_effective`, `wl`, `wg`)
+- Washer dryer-dominance gate for hold refresh
 
 ## What Clearly Did Not Work
 
 - Fixed absolute acceleration thresholds without adaptive baseline.
 - Baseline learning from delayed max-window acceleration values.
 - Dryer latch with permissive start criteria and no start-confirmation window.
+- Washer hold refresh based on permissive raw weak-activity thresholds.

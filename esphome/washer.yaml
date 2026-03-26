@@ -55,11 +55,11 @@ globals:
   - id: washer_micro_effective_trigger
     type: float
     restore_value: yes
-    initial_value: '0.30'
+    initial_value: '0.10'
   - id: washer_large_vibration_trigger
     type: float
     restore_value: yes
-    initial_value: '0.80'
+    initial_value: '0.30'
   - id: dryer_accel_baseline
     type: float
     restore_value: no
@@ -92,6 +92,10 @@ globals:
     type: uint32_t
     restore_value: no
     initial_value: '0'
+  - id: washer_accel_prev
+    type: float
+    restore_value: no
+    initial_value: '0.0'
 
 interval:
   - interval: 1s
@@ -441,6 +445,29 @@ sensor:
     update_interval: 1s
 
   - platform: template
+    id: washer_accel_jitter
+    name: "Debug Washer Accel Jitter"
+    internal: ${debug_metrics_internal}
+    disabled_by_default: false
+    entity_category: diagnostic
+    unit_of_measurement: "m/s²"
+    icon: "mdi:chart-scatter-plot"
+    lambda: |-
+      if (!id(washer_combined_acceleration_raw).has_state()) {
+        return 0.0f;
+      }
+      const float curr = id(washer_combined_acceleration_raw).state;
+      const float prev = id(washer_accel_prev);
+      const float j = (prev == 0.0f) ? 0.0f : abs(curr - prev);
+      id(washer_accel_prev) = curr;
+      return j;
+    update_interval: 1s
+    filters:
+      - max:
+          window_size: 5
+          send_every: 5
+
+  - platform: template
     id: debug_washer_tuning_compensation_factor_sensor
     name: "Debug Washer Tuning Compensation Factor"
     internal: ${debug_metrics_internal}
@@ -583,6 +610,7 @@ binary_sensor:
       const float wm = id(washer_micro_vibrations).state;
       const float dl = id(dryer_large_vibrations).state;
       const float dm = id(dryer_micro_vibrations).state;
+      const float wj = id(washer_accel_jitter).has_state() ? id(washer_accel_jitter).state : 0.0f;
       // Remove shared vibration from dryer before checking washer micro activity.
       const float wm_comp = wm - (dm * id(dryer_coupling_compensation_factor));
       const float wm_effective = wm_comp > 0.0f ? wm_comp : 0.0f;
@@ -592,11 +620,13 @@ binary_sensor:
         return false;
       }
 
-      if (wl >= id(washer_large_vibration_trigger) && wm_effective >= id(washer_micro_effective_trigger)) {
-        return true;
-      } else {
-        return false;
-      }
+      // Baseline-relative path (may be blocked by baseline drift).
+      const bool baseline_trigger = (wl >= id(washer_large_vibration_trigger) && wm_effective >= id(washer_micro_effective_trigger));
+      // Jitter path: immune to baseline drift, detects sample-to-sample variation.
+      const float WASHER_JITTER_TRIGGER = 0.07f;
+      const bool jitter_trigger = (wj >= WASHER_JITTER_TRIGGER);
+
+      return baseline_trigger || jitter_trigger;
     filters:
       - delayed_on: 30s
 
@@ -654,9 +684,11 @@ binary_sensor:
       const float dm = id(dryer_micro_vibrations).has_state() ? id(dryer_micro_vibrations).state : 0.0f;
       const float wl = id(washer_large_vibrations).has_state() ? id(washer_large_vibrations).state : 0.0f;
       const float wg = id(washer_combined_gyro).has_state() ? id(washer_combined_gyro).state : 0.0f;
+      const float dl = id(dryer_large_vibrations).has_state() ? id(dryer_large_vibrations).state : 0.0f;
       const float wm_comp = wm - (dm * id(dryer_coupling_compensation_factor));
       const float wm_effective = wm_comp > 0.0f ? wm_comp : 0.0f;
-      const bool weak_activity = (wm >= 0.12f) || (wl >= 0.20f) || (wg >= 0.35f);
+      const bool dryer_dominant = (dl >= 0.9f && dm >= 0.5f && dl > (wl * 1.2f));
+      const bool weak_activity = !dryer_dominant && ((wm_effective >= 0.08f) || (wl >= 0.24f) || (wg >= 0.50f));
 
       const bool strong_start = id(washer_accel_flag_1).state || (id(washer_gyro_flag_1).state && wm_effective >= 0.06f);
 
