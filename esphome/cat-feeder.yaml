@@ -2,7 +2,7 @@ esphome:
   name: cat-feeder-upstairs
 
 substitutions:
-  feeder_motor_pin: GPIO25
+  feeder_motor_pin: GPIO33
   feeder_stop_pin: GPIO27
   feeder_running_led_pin: GPIO4
 
@@ -51,20 +51,42 @@ light:
     internal: true
     output: feeder_running_led_output
 
+globals:
+  - id: feeder_started_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: feeder_seen_inactive
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
 script:
   - id: run_feeder_cycle
     mode: single
     then:
+      - lambda: |-
+          id(feeder_started_active) = id(feeder_stop).state;
+          id(feeder_seen_inactive) = !id(feeder_started_active);
+          ESP_LOGI("feeder_cycle", "Cycle start: stop switch is %s",
+                   id(feeder_started_active) ? "ACTIVE" : "INACTIVE");
+      - switch.turn_on: feeder_motor
+      - wait_until:
+          condition:
+            lambda: |-
+              if (!id(feeder_stop).state) {
+                id(feeder_seen_inactive) = true;
+              }
+              return id(feeder_stop).state && id(feeder_seen_inactive);
+          timeout: 30s
       - if:
           condition:
-            binary_sensor.is_off: feeder_stop
+            lambda: return id(feeder_stop).state && id(feeder_seen_inactive);
           then:
-            - switch.turn_on: feeder_motor
-            - wait_until:
-                binary_sensor.is_on: feeder_stop
-            - switch.turn_off: feeder_motor
+            - logger.log: "Cycle stop condition reached (release/press sequence complete)."
           else:
-            - logger.log: "Feeder stop switch is active; motor start ignored."
+            - logger.log: "Cycle timeout (5s) reached; stopping motor."
+      - switch.turn_off: feeder_motor
 
 button:
   - platform: template
@@ -99,4 +121,8 @@ binary_sensor:
       inverted: true
     on_press:
       then:
+        - logger.log: "Feeder stop switch changed to ACTIVE"
         - switch.turn_off: feeder_motor
+    on_release:
+      then:
+        - logger.log: "Feeder stop switch changed to INACTIVE"
