@@ -126,7 +126,11 @@ interval:
           const bool dryer_on = id(dryer_on_sensor).has_state() && id(dryer_on_sensor).state;
           const bool dryer_dynamic = id(dryer_combined_gyro).has_state() && id(dryer_combined_gyro).state >= 0.9f;
 
-          if (!washer_on) {
+          // Freeze washer baseline when signal is already elevated, even before formal detection.
+          // Without this, the ~33s baseline time constant races against the 30s delayed_on on the
+          // flags, causing the effective signal to decay below threshold before detection completes.
+          const float w_delta = w - id(washer_accel_baseline);
+          if (!washer_on && w_delta < 0.06f) {
             id(washer_accel_baseline) = id(washer_accel_baseline) * (1.0f - alpha) + w * alpha;
           }
           if (!dryer_on && !dryer_dynamic) {

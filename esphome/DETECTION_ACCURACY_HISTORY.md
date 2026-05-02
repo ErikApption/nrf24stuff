@@ -54,6 +54,10 @@ Improve washer and dryer run detection accuracy with two MPU6050 sensors while r
 - Result: Worked (fix for washer staying ON too long).
 - Reason: Previous weak-activity refresh used permissive raw motion signals, so background/dryer-coupled vibration could continuously extend washer ON time. Refresh now prefers compensated washer activity and blocks refresh while dryer clearly dominates.
 
+### 11. Washer baseline freeze on start (fix for washer not detected when started)
+- Result: Worked.
+- Reason: The baseline EMA (alpha=0.03, ~33s time constant) was adapting toward elevated values while `washer_on_sensor` was still false. This caused `wm_effective` and `wl` to decay back below threshold before the `delayed_on: 30s` on the accel/gyro flags could complete, preventing detection entirely. Fix freezes baseline learning whenever `w − baseline ≥ 0.06 m/s²`, which is below the detection thresholds but above dryer-coupling noise, so the effective signal stays stable long enough for detection to confirm.
+
 ## Key Tunables
 
 - `dryer_coupling_compensation_factor`
@@ -72,3 +76,4 @@ Improve washer and dryer run detection accuracy with two MPU6050 sensors while r
 - Baseline learning from delayed max-window acceleration values.
 - Dryer latch with permissive start criteria and no start-confirmation window.
 - Washer hold refresh based on permissive raw weak-activity thresholds.
+- Washer baseline learning while raw signal is already elevated at startup (races against delayed_on timer).

@@ -1,0 +1,102 @@
+esphome:
+  name: cat-feeder-upstairs
+
+substitutions:
+  feeder_motor_pin: GPIO25
+  feeder_stop_pin: GPIO27
+  feeder_running_led_pin: GPIO4
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "5VqSOKn3oeyZsu6nTdfOAxLMe4Lt+lnTa1BvxxE+MLs="
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: "GrenoblePirates-2G"
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Cat-Feeder-Upstairs"
+    password: "z57dUqYsyibo"
+
+captive_portal:
+    
+# Example configuration entry
+web_server:
+  port: 8080
+
+output:
+  - platform: gpio
+    id: feeder_running_led_output
+    pin:
+      number: ${feeder_running_led_pin}
+      mode: output
+      inverted: false
+
+light:
+  - platform: binary
+    id: feeder_running_led
+    internal: true
+    output: feeder_running_led_output
+
+script:
+  - id: run_feeder_cycle
+    mode: single
+    then:
+      - if:
+          condition:
+            binary_sensor.is_off: feeder_stop
+          then:
+            - switch.turn_on: feeder_motor
+            - wait_until:
+                binary_sensor.is_on: feeder_stop
+            - switch.turn_off: feeder_motor
+          else:
+            - logger.log: "Feeder stop switch is active; motor start ignored."
+
+button:
+  - platform: template
+    name: "Feed Cat"
+    icon: mdi:cat
+    on_press:
+      - script.execute: run_feeder_cycle
+  
+switch:
+  - platform: gpio
+    id: feeder_motor
+    internal: true
+    restore_mode: ALWAYS_OFF
+    pin:
+      number: ${feeder_motor_pin}
+      mode: output
+      inverted: false
+    on_turn_on:
+      then:
+        - light.turn_on: feeder_running_led
+    on_turn_off:
+      then:
+        - light.turn_off: feeder_running_led
+
+binary_sensor:
+  - platform: gpio
+    id: feeder_stop
+    name: "Feeder Stop Switch"
+    pin:
+      number: ${feeder_stop_pin}
+      mode: INPUT_PULLUP
+      inverted: true
+    on_press:
+      then:
+        - switch.turn_off: feeder_motor
