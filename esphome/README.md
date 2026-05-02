@@ -3,14 +3,14 @@
 ## Python
 
 ```bash
-python3 -m venv venv
+python3 -m venv .venv
 source venv/bin/activate
 pip3 install esphome
 ```
 
 ```powershell
-python -m venv venv
-. .\venv\Scripts\activat
+python -m venv .venv
+. .\venv\Scripts\activate
 ```
 
 ## Enter Flash Mode

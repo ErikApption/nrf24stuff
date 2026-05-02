@@ -67,7 +67,7 @@ Metal tab = Drain (same node as Pin 2)
 Simple connection map:
 
 ~~~text
-ESP32 GPIO25 ---200R or 270R--- Pin 1 (G)
+ESP32 GPIO33 ---200R or 270R--- Pin 1 (G)
                      |
                   6.9k to GND
 
@@ -78,7 +78,7 @@ Pin 3 (S) ------------- GND (common with ESP32 GND and PSU GND)
 
 ### MOSFET gate drive
 
-1. ESP32 GPIO (example: GPIO25) -> `200 or 270 ohm` resistor -> IRLZ44N `Gate`.
+1. ESP32 GPIO (example: GPIO33) -> `200 or 270 ohm` resistor -> IRLZ44N `Gate`.
 2. IRLZ44N `Gate` -> `6.9k ohm` resistor -> Ground (pull-down).
 
 The pull-down keeps the motor off during boot/reset.
@@ -101,7 +101,7 @@ Wire a simple status LED to indicate motor state:
 2. LED `cathode` (-) -> Ground.
 3. In ESPHome, this LED is tied to motor on/off events.
 
-- GPIO25: brown
+- GPIO33: brown
 - VCC: Blue
 - Gnd: Purple
 - GPIO27: white
@@ -114,10 +114,10 @@ For a prototyping board with 9 long rails, use this rail assignment from top to 
 |---|---|---|
 | 1 | +5V main bus | PSU +, ESP32 VIN/5V, Motor +, flyback diode cathode, 470 uF + 0.1 uF cap positive |
 | 2 | GND main bus | PSU -, ESP32 GND, stop switch return, LED return, capacitor negative |
-| 3 | MOSFET gate network | GPIO25 (through 200R/270R), MOSFET Pin 1 Gate, 6.9k pull-down start |
+| 3 | MOSFET gate network | GPIO33 (through 200R/270R), MOSFET Pin 1 Gate, 6.9k pull-down start |
 | 4 | Motor - / MOSFET drain | Motor -, MOSFET Pin 2 Drain, flyback diode anode |
 | 5 | MOSFET source local ground | MOSFET Pin 3 Source, 6.9k pull-down end, short thick bridge to Rail 2 |
-| 6 | ESP32 signal breakout | GPIO25, GPIO27, GPIO4 fan-out point |
+| 6 | ESP32 signal breakout | GPIO33, GPIO27, GPIO4 fan-out point |
 | 7 | Stop switch signal | GPIO27 line to switch |
 | 8 | Running LED signal | GPIO4 line to 330R + LED path |
 | 9 | Decoupling / spare | Spare rail for future additions |
@@ -143,7 +143,7 @@ With the IRLZ44N front face (text side) toward you and legs pointing down:
 
 Section 3 connection checklist for the MOSFET:
 
-1. GPIO25 (from Rail 6) -> 200R/270R -> Rail 3 -> Pin 1 (Gate).
+1. GPIO33 (from Rail 6) -> 200R/270R -> Rail 3 -> Pin 1 (Gate).
 2. 6.9k pull-down from Rail 3 to Rail 5.
 3. Motor negative lead on Rail 4 -> Pin 2 (Drain).
 4. Pin 3 (Source) to Rail 5, then Rail 5 -> Rail 2 with a short, thick jumper.
@@ -158,7 +158,7 @@ Section 3 connection checklist for the MOSFET:
 | Rail 3 | Rail 5 (through 6.9k) | Gate pull-down reference |
 | Rail 5 | MOSFET Pin 3 (Source) | Source local ground point |
 | Rail 5 | Rail 2 (short thick bridge) | Low-impedance return to main ground |
-| Rail 6 | Rail 3 (through 200R/270R) | GPIO25 gate control |
+| Rail 6 | Rail 3 (through 200R/270R) | GPIO33 gate control |
 | Rail 6 | Rail 7 | GPIO27 stop switch signal |
 | Rail 6 | Rail 8 | GPIO4 running LED signal |
 | Rail 1 | Rail 2 (through 470 uF + 0.1 uF) | Supply decoupling |
@@ -184,7 +184,7 @@ flowchart LR
 		PSU -->|+5V| ESP
 		M -->|Motor -| Q
 		Q -->|Source| GND
-		ESP -->|GPIO25 via 200R or 270R| Q
+		ESP -->|GPIO33 via 200R or 270R| Q
 		Q -->|Gate pull-down 6.9k| GND
 		ESP -->|GPIO4| LED
 		LED -->|Cathode| GND
