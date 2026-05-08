@@ -103,7 +103,7 @@ switch:
     pin:
       number: ${feeder_motor_pin}
       mode: output
-      inverted: false
+      inverted: true  # 2N3904 level shifter inverts logic; compensated here
     on_turn_on:
       then:
         - light.turn_on: feeder_running_led
