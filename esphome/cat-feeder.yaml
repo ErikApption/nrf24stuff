@@ -2,12 +2,12 @@ esphome:
   name: cat-feeder-upstairs
 
 substitutions:
-  feeder_motor_pin: GPIO33
-  feeder_stop_pin: GPIO27
-  feeder_running_led_pin: GPIO4
+  feeder_motor_pin: GPIO4
+  feeder_stop_pin: GPIO5
+  feeder_running_led_pin: GPIO6
 
 esp32:
-  board: esp32dev
+  board: esp32-c3-devkitm-1
   framework:
     type: esp-idf
 
@@ -103,7 +103,7 @@ switch:
     pin:
       number: ${feeder_motor_pin}
       mode: output
-      inverted: true  # 2N3904 level shifter inverts logic; compensated here
+      inverted: false  # FQP30N06L direct drive: HIGH = motor ON
     on_turn_on:
       then:
         - light.turn_on: feeder_running_led
