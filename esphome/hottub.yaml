@@ -1,0 +1,86 @@
+esphome:
+  name: hottub
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+logger:
+  level: INFO
+
+wifi:
+  ssid: "GrenoblePirates-2G"
+  password: !secret wifi_password
+  fast_connect: true
+
+api:
+  encryption:
+    key: "CHANGE_ME_GENERATE_A_NEW_KEY"
+
+ota:
+  - platform: esphome
+    password: "lrhottub1181"
+
+# --- Deep Sleep ---
+# Wake every 5 minutes, take readings, send, sleep again
+deep_sleep:
+  id: deep_sleep_control
+  sleep_duration: 5min
+
+# --- Dallas 1-Wire Bus ---
+one_wire:
+  - platform: gpio
+    pin: GPIO4
+
+sensor:
+  # --- DS18B20 Temperature Probe ---
+  # Takes a reading every 2s, averages 5 samples, then sends once
+  - platform: dallas_temp
+    name: "Hot Tub Temperature"
+    id: hottub_temp
+    update_interval: 2s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 5
+          send_every: 5
+
+  # --- Battery Voltage (ADC) ---
+  - platform: adc
+    pin: GPIO2
+    name: "Hot Tub Battery Voltage"
+    id: battery_voltage
+    update_interval: 2s
+    attenuation: 12db
+    filters:
+      # Adjust multiplier for your voltage divider ratio
+      # Example: 2:1 divider (100k + 100k) → multiply by 2
+      - multiply: 2.0
+      - sliding_window_moving_average:
+          window_size: 5
+          send_every: 5
+
+# --- Go to sleep after readings are sent ---
+script:
+  - id: go_to_sleep
+    then:
+      - logger.log: "Readings sent, going to deep sleep"
+      - deep_sleep.enter: deep_sleep_control
+
+# Wait for API connection, then allow sleep after data is pushed
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            and:
+              - api.connected:
+              - sensor.in_range:
+                  id: hottub_temp
+                  above: -50
+              - sensor.in_range:
+                  id: battery_voltage
+                  above: 0
+          then:
+            - delay: 2s
+            - script.execute: go_to_sleep
