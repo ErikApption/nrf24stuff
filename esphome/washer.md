@@ -91,12 +91,22 @@ All flags use `delayed_on: 30s` — the condition must hold continuously for 30 
 
 If the washer is running but not being detected:
 
-1. **Enable debug metrics** — set `debug_metrics_internal: "false"` in the substitutions block to expose all debug sensors to Home Assistant.
-2. **Check `Debug Washer Large Trigger Margin`** — if consistently negative while the washer runs, `washer_large_vibration_trigger` is too high. Lower it by `0.05`.
-3. **Check `Debug Washer Micro Trigger Margin`** — if consistently negative, `washer_micro_effective_trigger` is too high or compensation is over-subtracting. Lower the trigger or reduce `dryer_coupling_compensation_factor`.
-4. **Check `Debug Washer Accel Jitter`** — if this stays below `0.07` during washer operation, the jitter path won't fire either. This suggests the washer vibration is steady-state (elevated but not varying sample-to-sample).
-5. **Check baseline behavior** — if `Washer Accel Baseline` is rising toward the running value, the baseline freeze threshold (`0.06`) may be too high for your washer's vibration signature. This would need a code change to lower the freeze delta.
-6. **Check the `delayed_on: 30s`** — the washer must sustain the trigger condition for a full 30 seconds. If vibration is intermittent at startup, the timer resets each time the condition drops. Consider lowering `delayed_on` to `20s` if this is the pattern.
+1. **Run calibration first** — press the "Calibrate Accelerometers" button in HA (under the washer device config section). Both machines must be OFF and still. The ESP collects 30 samples over 30 seconds and computes offsets so the resting combined acceleration = 9.81 m/s² (gravity). Offsets persist across reboots.
+2. **Enable debug metrics** — set `debug_metrics_internal: "false"` in the substitutions block to expose all debug sensors to Home Assistant.
+3. **Check `Debug Washer Large Trigger Margin`** — if consistently negative while the washer runs, `washer_large_vibration_trigger` is too high. Lower it by `0.05`.
+4. **Check `Debug Washer Micro Trigger Margin`** — if consistently negative, `washer_micro_effective_trigger` is too high or compensation is over-subtracting. Lower the trigger or reduce `dryer_coupling_compensation_factor`.
+5. **Check `Debug Washer Accel Jitter`** — if this stays below `0.07` during washer operation, the jitter path won't fire either. This suggests the washer vibration is steady-state (elevated but not varying sample-to-sample).
+6. **Check baseline behavior** — if `Washer Accel Baseline` is rising toward the running value, the baseline freeze threshold (`0.06`) may be too high for your washer's vibration signature. This would need a code change to lower the freeze delta.
+7. **Check the `delayed_on: 30s`** — the washer must sustain the trigger condition for a full 30 seconds. If vibration is intermittent at startup, the timer resets each time the condition drops. Consider lowering `delayed_on` to `20s` if this is the pattern.
+
+### Accelerometer calibration
+
+The MPU6050 sensors have per-unit offsets that drift over time and temperature. Instead of hardcoded offsets in the YAML, the system uses auto-calibration:
+
+- **How it works**: Press "Calibrate Accelerometers" in HA. The ESP averages 30 raw readings per axis, then computes per-axis offsets that scale the resting vector magnitude to exactly 9.81 m/s².
+- **When to calibrate**: After flashing, after physically moving the sensor, or if the resting baseline drifts far from 9.81.
+- **Where offsets are stored**: In ESP32 flash (`restore_value: yes` globals). They survive reboots. The offset values are also exposed as HA diagnostic sensors (`Washer Offset X/Y/Z`, `Dryer Offset X/Y/Z`).
+- **Clear offsets**: Press "Clear Accel Offsets" to reset all offsets to zero (useful before re-calibrating if values look wrong).
 
 ### Practical guidance
 
