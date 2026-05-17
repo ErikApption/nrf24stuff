@@ -1,16 +1,15 @@
-# ESP32 + 5V Motor Control (IRLZ44N + 1N5817 + 2N3904 + Stop Switch + Running LED)
+# ESP32 + 5V Motor Control (FQP30N06L + 1N5817 + Stop Switch + Running LED)
 
 This guide shows how to control a 5V DC motor from an ESP32 using:
 
-- IRLZ44N (logic-level N-channel MOSFET) as a low-side switch
+- FQP30N06L (logic-level N-channel MOSFET) as a low-side switch, driven directly from 3.3V GPIO
 - 1N5817 (Schottky diode) as flyback protection
-- 2N3904 NPN transistor as 3.3V to 5V gate level shifter
 - A stop switch to signal when the motor should stop
 - A running LED that is ON only while the motor is running
 
-## ESP Home 
+## ESPHome
 
-[esp 32 configuration](./cat-feeder.yaml)
+[ESP32 configuration](./cat-feeder.yaml)
 
 ## 1) What this design does
 
@@ -22,36 +21,49 @@ This guide shows how to control a 5V DC motor from an ESP32 using:
 - When motor turns off, the flyback diode clamps voltage spikes.
 - The stop switch input always forces motor OFF when pressed.
 
-## 2) Wiring instructions
+## 2) Why FQP30N06L — no level shifter needed
+
+The FQP30N06L is a logic-level MOSFET with a gate threshold voltage of 1.0–2.5V. At 3.3V Vgs it is well into enhancement for the low currents a small 5V motor draws. This eliminates the 2N3904 NPN level-shifter circuit that was required with the IRLZ44N.
+
+Key specs:
+- Vds: 60V
+- Id (continuous): 32A
+- Rds(on): 35mΩ @ Vgs = 10V (much lower at 3.3V than needed for a small motor)
+- Vgs(th): 1.0–2.5V
+- Package: TO-220
+
+**Direct drive from ESP32 GPIO — no inverting logic, no pull-up resistor, no transistor.**
+
+## 3) Wiring instructions
 
 Use a 5V supply sized for both the motor and ESP32 load.
 Always connect grounds together.
 
 ### Power and motor path
 
-1. 5V supply `+` -> Motor `+` terminal.
-2. 5V supply `+` -> ESP32 `5V`/`VIN` pin.
-3. Motor `-` terminal -> IRLZ44N `Drain`.
-4. IRLZ44N `Source` -> Ground.
-5. ESP32 `GND` -> Same Ground (common ground with motor PSU).
+1. 5V supply `+` → Motor `+` terminal.
+2. 5V supply `+` → ESP32 `5V`/`VIN` pin.
+3. Motor `-` terminal → FQP30N06L `Drain`.
+4. FQP30N06L `Source` → Ground.
+5. ESP32 `GND` → Same Ground (common ground with motor PSU).
 
 ### Flyback diode (1N5817)
 
 Place the diode physically near the motor terminals:
 
-- Diode `cathode` (striped end) -> Motor `+` (5V side)
-- Diode `anode` -> Motor `-` (MOSFET drain side)
+- Diode `cathode` (striped end) → Motor `+` (5V side)
+- Diode `anode` → Motor `-` (MOSFET drain side)
 
 This keeps the diode reverse-biased during normal operation and active only on turn-off spikes.
 
-### MOSFET pinout (3 pins) and simple schematic
+### MOSFET pinout (TO-220 package)
 
-For the IRLZ44N in TO-220 package, hold it with the flat face (text side) toward you and legs pointing down:
+Hold the FQP30N06L with the flat face (text side) toward you and legs pointing down:
 
 ~~~text
 Front view (flat/text side facing you)
 
-   IRLZ44N
+   FQP30N06L
   _________
  |         |
  |_________|
@@ -65,63 +77,26 @@ Pin 3 = Source
 Metal tab = Drain (same node as Pin 2)
 ~~~
 
-Simple connection map (with 2N3904 level shifter):
+### Gate drive (direct from ESP32)
 
 ~~~text
-ESP32 GPIO33 ---2kΩ--- 2N3904 Base (Pin 2)
-                       2N3904 Emitter (Pin 1) --- GND
-
-5V ---6.9kΩ--- 2N3904 Collector (Pin 3) --- Pin 1 (G) IRLZ44N
-
-Motor - ----------------------------------- Pin 2 (D)
-
-Pin 3 (S) --------------------------------- GND (common with ESP32 GND and PSU GND)
+ESP32 GPIO33 ---[220Ω]--- FQP30N06L Pin 1 (Gate)
+                                |
+                             [10kΩ]
+                                |
+                               GND
 ~~~
 
-Logic is inverted: GPIO33 HIGH → 2N3904 ON → Gate pulled LOW → motor OFF.
-ESPHome compensates with `inverted: true` on the motor output pin.
-
-### MOSFET gate drive (via 2N3904 level shifter)
-
-The ESP32 outputs 3.3V which is insufficient to fully turn on the IRLZ44N. A 2N3904 NPN transistor converts the 3.3V signal to a 5V gate drive.
-
-#### 2N3904 pinout (TO-92 package)
-
-Hold it with the flat/text side facing you and legs pointing down:
-
-~~~text
-Front view (flat/text side facing you)
-
-  2N3904
-  _____
- /     \
-|_______|
-  |  |  |
-  1  2  3
-  E  B  C
-
-Pin 1 = Emitter
-Pin 2 = Base
-Pin 3 = Collector
-~~~
-
-#### 2N3904 wiring
-
-1. ESP32 GPIO33 -> `2k ohm` resistor -> 2N3904 `Base` (Pin 2).
-2. 2N3904 `Emitter` (Pin 1) -> Ground.
-3. 5V -> `6.9k ohm` resistor -> 2N3904 `Collector` (Pin 3).
-4. 2N3904 `Collector` (Pin 3) -> IRLZ44N `Gate` (Pin 1).
-
-> **No gate pull-down needed.** When the 2N3904 is ON it pulls the gate to near 0V directly. A pull-down would fight the pull-up and reduce gate voltage below the IRLZ44N threshold.
-
-> **Inverted logic:** When GPIO33 is HIGH the 2N3904 turns on and pulls the gate LOW (motor OFF). ESPHome compensates with `inverted: true` on the motor output pin so Home Assistant logic remains unchanged.
+- **220Ω series resistor**: Limits inrush current into gate capacitance (~1nF). Optional but good practice.
+- **10kΩ pull-down resistor**: Keeps gate LOW (motor OFF) during ESP32 boot when GPIO is floating.
+- **Logic is non-inverted**: GPIO33 HIGH → gate HIGH → motor ON. No `inverted: true` needed in ESPHome.
 
 ### Stop switch input
 
 Wire switch as active-low with ESP32 internal pull-up:
 
-1. One switch side -> ESP32 GPIO (example: GPIO27).
-2. Other switch side -> Ground.
+1. One switch side → ESP32 GPIO27.
+2. Other switch side → Ground.
 3. Configure GPIO27 as `INPUT_PULLUP` in software.
 
 When pressed/closed, input reads LOW and motor is stopped.
@@ -130,158 +105,140 @@ When pressed/closed, input reads LOW and motor is stopped.
 
 Wire a simple status LED to indicate motor state:
 
-1. ESP32 GPIO4 -> `330 ohm` resistor -> LED `anode` (+).
-2. LED `cathode` (-) -> Ground.
+1. ESP32 GPIO4 → `330Ω` resistor → LED `anode` (+).
+2. LED `cathode` (-) → Ground.
 3. In ESPHome, this LED is tied to motor on/off events.
 
+### Wire color reference
+
 - GPIO33: brown
-- VCC: Blue
-- Gnd: Purple
+- VCC: blue
+- GND: purple
 - GPIO27: white
 
-## 3) 9-rail prototyping board layout
+## 4) 9-rail prototyping board layout
 
-For a prototyping board with 9 long rails, use this rail assignment from top to bottom:
+With the 2N3904 level shifter eliminated, the layout is much simpler. Only 6 rails are actively used.
 
 | Rail | Purpose | Main connections |
 |---|---|---|
-| 1 | +5V main bus | PSU +, ESP32 VIN/5V, Motor +, flyback diode cathode, 6.9kΩ pull-up (to Rail 3), 470 uF + 0.1 uF cap positive |
-| 2 | GND main bus | PSU -, ESP32 GND, stop switch return, LED return, capacitor negative |
-| 3 | MOSFET gate / 2N3904 collector | 2N3904 Collector (Rail 9 bridge), MOSFET Pin 1 Gate, 6.9kΩ pull-up other end (from Rail 1) |
-| 4 | Motor - / MOSFET drain | Motor -, MOSFET Pin 2 Drain, flyback diode anode |
-| 5 | MOSFET source local ground | MOSFET Pin 3 Source, short thick bridge to Rail 2, 2N3904 Pin 1 (E) |
-| 6 | 2N3904 Base | 2N3904 Pin 2 (B), 2kΩ resistor to Rail 6 (GPIO33) |
-| 7 | 2N3904 Collector | 2N3904 Pin 3 (C), short bridge to Rail 3 (Gate drive) |
+| 1 | +5V main bus (blue) | PSU +, ESP32 VIN/5V, Motor +, 1N5817 cathode, 470µF cap +, 0.1µF cap + |
+| 2 | GND main bus (purple, yellow) | PSU -, ESP32 GND, stop switch return, LED cathode, 470µF cap -, 0.1µF cap -, 10kΩ pull-down leg |
+| 3 | MOSFET Gate node | FQP30N06L Pin 1 (Gate), 220Ω resistor (from Rail 6), 10kΩ resistor (to Rail 2) |
+| 4 | Motor - / MOSFET Drain (green) | Motor -, FQP30N06L Pin 2 (Drain), 1N5817 anode |
+| 5 | MOSFET Source (local GND) | FQP30N06L Pin 3 (Source), short thick bridge to Rail 2 |
+| 6 | GPIO33 landing | GPIO33 wire, 220Ω resistor (to Rail 3) |
+| 7–9 | Unused | Available for future expansion |
 
+### FQP30N06L pin placement
 
+With the FQP30N06L front face (text side) toward you and legs pointing down, the three pins land on consecutive rails:
 
-Keep motor-current wiring short and away from GPIO/switch wiring where possible.
-Bridge Rail 5 to Rail 2 with a short, thick jumper to tie MOSFET source into the main ground bus.
-The 2N3904 sits on Rails 7, 8, 9. Bridge Rail 7 to Rail 2 (Emitter→GND) and Rail 9 to Rail 3 (Collector→Gate) with short jumpers.
-The 6.9kΩ pull-up resistor bridges Rail 1 (+5V) directly to Rail 3; insert it straight across those two rails.
+1. Pin 1 (`Gate`) → Rail 3
+2. Pin 2 (`Drain`) → Rail 4
+3. Pin 3 (`Source`) → Rail 5
 
-### 2N3904 pin details for Section 3 rail layout
+Metal tab is Drain — keep it away from ground rails unless intentionally insulated.
 
-The TO-92 pin pitch is 1.27mm (half of 2.54mm), so with a small preparation step the 2N3904 can be made to span exactly 3 consecutive rails at 2.54mm pitch.
+### Component placement on rails
 
-**Preparation — bend the outer pins:**
-Hold the 2N3904 body with flat side facing you. Gently bend Pin 1 (E) outward to the left and Pin 3 (C) outward to the right until all three pins are evenly spaced at 2.54mm. The middle pin (B) stays straight.
+Every component below is listed with the exact rail each leg connects to.
 
-With the 2N3904 flat/text side facing you and legs pointing down (after bending):
-
-~~~text
-Front view after bending
-
-    2N3904
-    _____
-   /     \
-  |_______|
- /    |    \
-1     2     3
-E     B     C
-
-Pin 1 (E) → Rail 5
-Pin 2 (B) → Rail 6
-Pin 3 (C) → Rail 7
-~~~
-
-| Pin | Name | Rail | Onward connection |
+| Component | Leg 1 (rail) | Leg 2 (rail) | Notes |
 |---|---|---|---|
-| 1 | Emitter | Rail 7 | Short jumper from Rail 7 to Rail 2 (GND) |
-| 2 | Base | Rail 8 | 2kΩ resistor from Rail 8 to Rail 6 (GPIO33) |
-| 3 | Collector | Rail 9 | Short jumper from Rail 9 to Rail 3 (Gate/pull-up node) |
-
-**6.9kΩ pull-up resistor:** Insert it directly across Rail 1 (+5V) and Rail 3 (Gate node). One leg in Rail 1, other leg in Rail 3 — no jumper wire needed, the resistor body bridges the gap.
-
-The IRLZ44N Gate (Pin 1) also sits on Rail 3, so Rail 3 is the common node for the 2N3904 Collector, the 6.9kΩ pull-up, and the IRLZ44N Gate. There is no pull-down resistor — the 2N3904 handles pulling the gate low when the motor should be OFF.
-
-### IRLZ44N pin details for Section 3 rail layout
-
-With the IRLZ44N front face (text side) toward you and legs pointing down:
-
-1. Pin 1 (`Gate`) -> Rail 3 (`MOSFET gate / 2N3904 collector`).
-2. Pin 2 (`Drain`) -> Rail 4 (`Motor - / MOSFET drain node`).
-3. Pin 3 (`Source`) -> Rail 5 (`MOSFET source local ground rail`), then short bridge from Rail 5 to Rail 2.
-4. Metal tab -> same as Pin 2 (`Drain`), so keep the tab away from ground rails and metal hardware unless intentionally insulated.
-
-Section 3 connection checklist for the MOSFET:
-
-1. GPIO33 (from Rail 6) -> 2kΩ -> 2N3904 Base (Pin 2).
-2. 2N3904 Emitter (Pin 1) -> Rail 2 (GND).
-3. 5V (Rail 1) -> 6.9kΩ -> 2N3904 Collector (Pin 3) -> Rail 3.
-4. Rail 3 -> Pin 1 (Gate) of IRLZ44N.
-5. Motor negative lead on Rail 4 -> Pin 2 (Drain).
-6. Pin 3 (Source) to Rail 5, then Rail 5 -> Rail 2 with a short, thick jumper.
+| FQP30N06L | Pin 1 Gate → Rail 3 | Pin 2 Drain → Rail 4, Pin 3 Source → Rail 5 | MOSFET spans Rails 3–4–5 |
+| 220Ω resistor | Rail 6 | Rail 3 | Series gate resistor; bridges GPIO33 landing to Gate node |
+| 10kΩ resistor | Rail 3 | Rail 2 | Gate pull-down; bridges Gate node to GND bus |
+| 1N5817 diode | Anode → Rail 4 | Cathode → Rail 1 | Flyback protection; bridges Drain to +5V |
+| 470µF electrolytic cap | + leg → Rail 1 | - leg → Rail 2 | Bulk supply decoupling; observe polarity |
+| 0.1µF ceramic cap | Leg 1 → Rail 1 | Leg 2 → Rail 2 | HF supply decoupling; no polarity |
+| Bridge wire (thick) | Rail 5 | Rail 2 | Ties MOSFET Source to main GND; keep short |
+| Motor - wire | Rail 4 | — | Switched motor return |
+| Motor + wire | Rail 1 | — | Motor power from +5V bus |
+| GPIO33 wire | Rail 6 | — | ESP32 gate drive signal |
+| Stop switch wire | GPIO27 | Rail 2 (GND) | Active-low with internal pull-up |
+| LED + 330Ω | GPIO4 → 330Ω → LED anode | LED cathode → Rail 2 | Running indicator |
 
 ### Rail-to-rail connection table
 
-| From | To | Purpose |
-|---|---|---|
-| Rail 1 | Rail 1 nodes (Motor +, ESP32 VIN, diode cathode, cap +) | Shared +5V distribution |
-| Rail 4 | MOSFET Pin 2 (Drain) and Motor - | Switched motor return path |
-| Rail 3 | MOSFET Pin 1 (Gate) | Gate drive path |
-| Rail 5 | MOSFET Pin 3 (Source) | Source local ground point |
-| Rail 5 | Rail 2 (short thick bridge) | Low-impedance return to main ground |
-| Rail 6 | Rail 8 (through 2kΩ) | GPIO33 → 2N3904 Base |
-| Rail 8 | 2N3904 Pin 2 Base | Base drive |
-| Rail 7 | 2N3904 Pin 1 Emitter | Emitter local node |
-| Rail 7 | Rail 2 (short jumper) | Emitter to GND |
-| Rail 9 | 2N3904 Pin 3 Collector | Collector local node |
-| Rail 9 | Rail 3 (short jumper) | Collector to Gate drive node |
-| Rail 1 | Rail 3 (through 6.9kΩ) | 5V pull-up for Gate/Collector node |
-| Rail 1 | Rail 2 (through 470 uF + 0.1 uF) | Supply decoupling |
+| From | To | Via | Purpose |
+|---|---|---|---|
+| Rail 6 | Rail 3 | 220Ω resistor | GPIO33 gate drive to Gate node |
+| Rail 3 | Rail 2 | 10kΩ resistor | Gate pull-down to GND |
+| Rail 4 | Rail 1 | 1N5817 diode (anode→cathode) | Flyback clamp |
+| Rail 5 | Rail 2 | Short thick bridge wire | MOSFET Source to main GND |
+| Rail 1 | Rail 2 | 470µF electrolytic cap | Bulk supply decoupling |
+| Rail 1 | Rail 2 | 0.1µF ceramic cap | HF supply decoupling |
 
-In this layout, `Motor +` and ESP32 `VIN/5V` are both connected directly to Rail 1.
-The MOSFET pins are placed on consecutive rails: Rail 3 (Gate), Rail 4 (Drain), Rail 5 (Source).
-
-## 4) Mermaid wiring diagram
+## 5) Mermaid wiring diagram
 
 ```mermaid
 flowchart LR
-		PSU[5V Supply]
-		M[5V DC Motor]
-		D[1N5817 Flyback Diode]
-		Q[IRLZ44N MOSFET]
-		ESP[ESP32]
-		HA[Home Assistant Feed Cat Button]
-		SW[Stop Switch]
-		LED[Running LED + 330R]
-		GND[(Common Ground)]
+    PSU[5V Supply]
+    M[5V DC Motor]
+    D[1N5817 Flyback Diode]
+    Q[FQP30N06L MOSFET]
+    ESP[ESP32]
+    HA[Home Assistant Feed Cat Button]
+    SW[Stop Switch]
+    LED[Running LED + 330Ω]
+    GND[(Common Ground)]
 
-		PSU -->|+5V| M
-		PSU -->|+5V| ESP
-		M -->|Motor -| Q
-		Q -->|Source| GND
-		NPN[2N3904 NPN]
-		ESP -->|GPIO33 via 2kΩ| NPN
-		NPN -->|Emitter| GND
-		PSU -->|5V via 6.9kΩ| NPN
-		NPN -->|Collector to Gate| Q
-		ESP -->|GPIO4| LED
-		LED -->|Cathode| GND
+    PSU -->|+5V| M
+    PSU -->|+5V| ESP
+    M -->|Motor -| Q
+    Q -->|Source| GND
+    ESP -->|GPIO33 via 220Ω| Q
+    Q ---|Gate pull-down 10kΩ| GND
+    ESP -->|GPIO4| LED
+    LED -->|Cathode| GND
 
-		HA -->|Run cycle| ESP
-		SW -->|to GPIO27| ESP
-		SW -->|to GND| GND
-		ESP -->|GND| GND
+    HA -->|Run cycle| ESP
+    SW -->|to GPIO27| ESP
+    SW -->|to GND| GND
+    ESP -->|GND| GND
 
-		D -->|Cathode to Motor +| PSU
-		D -->|Anode to Motor -| Q
+    D -->|Cathode to Motor +| PSU
+    D -->|Anode to Motor -| Q
 ```
+
+## 6) ESPHome notes
+
+With the FQP30N06L direct-drive design, the motor output pin configuration simplifies:
+
+- GPIO33 output: **no `inverted: true`** — HIGH means motor ON, LOW means motor OFF.
+- The 10kΩ pull-down ensures the motor stays OFF during boot regardless of ESP32 GPIO state.
 
 ## 7) Important limits and checks
 
-- Confirm motor stall current is within IRLZ44N thermal limits.
+- Confirm motor stall current is within FQP30N06L thermal limits (32A continuous, 79W max dissipation — far beyond any small 5V motor).
+- At 3.3V Vgs the Rds(on) will be higher than the 35mΩ spec (which is at 10V), but for a motor drawing under 1–2A this adds negligible voltage drop and heat.
 - Keep motor wiring short and thicker than signal wiring.
-- Add a bulk capacitor near motor supply (for example, 220 uF to 470 uF).
-- Add a 0.1 uF ceramic across 5V and GND near ESP32 power pins (this is the same as 100 nF).
+- Add a bulk capacitor near motor supply (470µF electrolytic).
+- Add a 0.1µF ceramic across 5V and GND near ESP32 power pins.
 - Keep the Rail 5 to Rail 2 source-ground bridge short and low resistance.
 - If switch wiring is long/noisy, add debounce in ESPHome filters.
 
 ## 8) Quick test plan
 
-1. Verify motor stays OFF at ESP32 boot (pull-down working).
+1. Verify motor stays OFF at ESP32 boot (10kΩ pull-down working).
 2. Press `Feed Cat`; motor should start and running LED should turn ON.
 3. Trigger stop switch; motor should turn OFF immediately and LED should turn OFF.
 4. Press `Feed Cat` while stop switch is already active; motor should not start.
-5. Repeat several times and check MOSFET temperature.
+5. Repeat several times and check MOSFET temperature (should stay cool with a small motor).
+
+## 9) Bill of materials
+
+| Qty | Part | Purpose |
+|---|---|---|
+| 1 | FQP30N06L (TO-220) | Low-side motor switch |
+| 1 | 1N5817 Schottky diode | Flyback protection |
+| 1 | 220Ω resistor (1/4W) | Gate series resistor |
+| 1 | 10kΩ resistor (1/4W) | Gate pull-down |
+| 1 | 330Ω resistor (1/4W) | LED current limiter |
+| 1 | 470µF electrolytic cap | Bulk supply decoupling |
+| 1 | 0.1µF ceramic cap | HF supply decoupling |
+| 1 | LED (any color) | Motor running indicator |
+| 1 | Momentary/limit switch | Stop switch |
+| 1 | ESP32 dev board | Controller |
+| 1 | 5V power supply | Motor + ESP32 power |
