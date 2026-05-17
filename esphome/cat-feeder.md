@@ -123,7 +123,7 @@ With the 2N3904 level shifter eliminated, the layout is much simpler. Only 6 rai
 
 | Rail | Purpose | Main connections |
 |---|---|---|
-| 1 | +5V main bus (blue) | PSU +, ESP32-C3 VIN/5V, Motor +, 1N5817 cathode, 470µF cap +, 0.1µF cap + |
+| 1 | +5V main bus (blue) | PSU +, ESP32-C3 VIN/5V, Motor +, 1N5817 cathode (circle), 470µF cap +, 0.1µF cap + |
 | 2 | GND main bus (purple, yellow) | PSU -, ESP32-C3 GND, stop switch return, LED cathode, 470µF cap -, 0.1µF cap -, 10kΩ pull-down leg |
 | 3 | MOSFET Gate node | FQP30N06L Pin 1 (Gate), 220Ω resistor (from Rail 6), 10kΩ resistor (to Rail 2) |
 | 4 | Motor - / MOSFET Drain (green) | Motor -, FQP30N06L Pin 2 (Drain), 1N5817 anode |
@@ -210,6 +210,14 @@ With the FQP30N06L direct-drive design, the motor output pin configuration simpl
 - GPIO4 output: **no `inverted: true`** — HIGH means motor ON, LOW means motor OFF.
 - The 10kΩ pull-down ensures the motor stays OFF during boot regardless of ESP32-C3 GPIO state.
 
+| Wire | Pin |
+| ---- | --- |
+| Purple | G |
+| Blue   | 5v |
+| Brown  | GPIO4 |
+| White  | GPIO5 |
+| Grey   | GPIO6 |
+
 ## 7) Important limits and checks
 
 - Confirm motor stall current is within FQP30N06L thermal limits (32A continuous, 79W max dissipation — far beyond any small 5V motor).
@@ -228,18 +236,3 @@ With the FQP30N06L direct-drive design, the motor output pin configuration simpl
 4. Press `Feed Cat` while stop switch is already active; motor should not start.
 5. Repeat several times and check MOSFET temperature (should stay cool with a small motor).
 
-## 9) Bill of materials
-
-| Qty | Part | Purpose |
-|---|---|---|
-| 1 | FQP30N06L (TO-220) | Low-side motor switch |
-| 1 | 1N5817 Schottky diode | Flyback protection |
-| 1 | 220Ω resistor (1/4W) | Gate series resistor |
-| 1 | 10kΩ resistor (1/4W) | Gate pull-down |
-| 1 | 330Ω resistor (1/4W) | LED current limiter |
-| 1 | 470µF electrolytic cap | Bulk supply decoupling |
-| 1 | 0.1µF ceramic cap | HF supply decoupling |
-| 1 | LED (any color) | Motor running indicator |
-| 1 | Momentary/limit switch | Stop switch |
-| 1 | ESP32-C3 dev board | Controller |
-| 1 | 5V power supply | Motor + ESP32-C3 power |

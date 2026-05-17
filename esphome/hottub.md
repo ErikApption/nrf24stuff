@@ -12,34 +12,37 @@ Battery-powered ESP32-C3 with a DS18B20 temperature probe. Wakes every 5 minutes
 
 ## Wiring
 
-### DS18B20 Temperature Probe → GPIO4
+### DS18B20 Temperature Probe → GPIO4 (powered by GPIO5)
+
+The DS18B20 VCC is powered from GPIO5 instead of the 3.3V rail. This allows the ESP32 to cut power to the sensor during deep sleep, reducing idle draw to zero. The pull-up resistor also connects to GPIO5 so it's only active when the sensor is on.
 
 ```
          ESP32-C3
         ┌─────────┐
         │         │
- 3.3V ──┤ 3V3     │
-        │         │
-        │    GPIO4├───┬─── DS18B20 DATA (yellow)
+        │    GPIO5├───┬────────────── DS18B20 VCC (red)
         │         │   │
         │         │  [4.7kΩ]
         │         │   │
- 3.3V ──┤ 3V3 ───┘───┘
+        │    GPIO4├───┴────────────── DS18B20 DATA (yellow)
         │         │
-  GND ──┤ GND ────────── DS18B20 GND (black)
-        │         │
- 3.3V ──┤ 3V3 ────────── DS18B20 VCC (red)
+  GND ──┤ GND ────────────────────── DS18B20 GND (black)
         │         │
         └─────────┘
 ```
 
 | DS18B20 Wire | Connects To |
 |--------------|-------------|
-| Red (VCC)    | 3.3V        |
+| Red (VCC)    | GPIO5       |
 | Black (GND)  | GND         |
-| Yellow (DATA)| GPIO4 + 4.7kΩ pull-up to 3.3V |
+| Yellow (DATA)| GPIO4 + 4.7kΩ pull-up to GPIO5 |
 
-The 4.7kΩ pull-up resistor goes between the DATA line and 3.3V. This is required for the 1-Wire protocol.
+The 4.7kΩ pull-up resistor goes between the DATA line and GPIO5 (not 3.3V). This ensures the pull-up is only active when the sensor is powered on.
+
+**Power behavior:**
+- On boot, GPIO5 is driven HIGH to power the sensor (with a 50ms stabilization delay).
+- After readings are taken and sent, GPIO5 is driven LOW before entering deep sleep.
+- During deep sleep, GPIOs are low → sensor draws 0µA.
 
 ### Battery Voltage Divider → GPIO2
 
@@ -68,15 +71,16 @@ Check your specific C3 devkit — some accept battery voltage directly on a `BAT
 
 ## Full Pinout Summary
 
-| GPIO | Function              |
-|------|-----------------------|
-| GPIO4| DS18B20 1-Wire data   |
-| GPIO2| Battery ADC (divider) |
+| GPIO | Function                    |
+|------|-----------------------------|
+| GPIO4| DS18B20 1-Wire data         |
+| GPIO5| DS18B20 VCC (power control) |
+| GPIO2| Battery ADC (divider)       |
 
 ## Notes
 
 - **Voltage divider values**: If your battery exceeds 4.2V (e.g., 2S LiPo at 8.4V), adjust the resistor ratio and the `multiply` filter accordingly. Formula: `multiply = (R1 + R2) / R2`.
-- **Deep sleep current**: The ESP32-C3 draws ~5µA in deep sleep. Main power drain is the ~12–15 second wake window every 5 minutes.
+- **Deep sleep current**: The ESP32-C3 draws ~5µA in deep sleep. The DS18B20 draws 0µA (power cut via GPIO5). Main power drain is the ~12–15 second wake window every 5 minutes.
 - **DS18B20 address**: If you have multiple sensors on the bus, specify the address in the YAML. Run once without an address to discover it in the logs.
 - **Waterproofing**: Use the stainless steel waterproof DS18B20 variant for submersion. Seal the cable entry point with heat shrink or silicone.
 

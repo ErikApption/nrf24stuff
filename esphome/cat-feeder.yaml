@@ -4,12 +4,15 @@ esphome:
 substitutions:
   feeder_motor_pin: GPIO4
   feeder_stop_pin: GPIO5
-  feeder_running_led_pin: GPIO6
+  feeder_running_led_pin: GPIO10
+  feeder_manual_button_pin: GPIO3
 
 esp32:
   board: esp32-c3-devkitm-1
   framework:
     type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP_JTAG_BRIDGE_DISABLE: "y"
 
 # Enable logging
 logger:
@@ -126,3 +129,18 @@ binary_sensor:
     on_release:
       then:
         - logger.log: "Feeder stop switch changed to INACTIVE"
+
+  - platform: gpio
+    id: feeder_manual_button
+    name: "Feeder Manual Button"
+    pin:
+      number: ${feeder_manual_button_pin}
+      mode: INPUT_PULLUP
+      inverted: true
+    filters:
+      - delayed_on: 200ms
+      - delayed_off: 200ms
+    on_press:
+      then:
+        - logger.log: "Manual feed button pressed"
+        - script.execute: run_feeder_cycle
