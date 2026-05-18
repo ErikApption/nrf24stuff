@@ -27,7 +27,7 @@ wifi:
 
 api:
   encryption:
-    key: "CHANGE_ME_GENERATE_A_NEW_KEY"
+    key: "fHli4zx/CLe2u9KxtFyls1/nNsw3TVnuTIXtFJEg4Yc="
 
 ota:
   - platform: esphome
