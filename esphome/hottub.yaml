@@ -1,10 +1,10 @@
 esphome:
   name: hottub
   on_boot:
-    priority: -100
+    priority: 600
     then:
       - output.turn_on: sensor_power
-      - delay: 500ms  # Let DS18B20 stabilize after power-on
+      - delay: 2s  # DS18B20 needs time to fully initialize before one_wire scan
 
 esp32:
   board: esp32-c3-devkitm-1
