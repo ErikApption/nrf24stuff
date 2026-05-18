@@ -4,7 +4,7 @@ esphome:
     priority: -100
     then:
       - output.turn_on: sensor_power
-      - delay: 50ms  # Let DS18B20 stabilize after power-on
+      - delay: 500ms  # Let DS18B20 stabilize after power-on
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -42,7 +42,7 @@ deep_sleep:
 # --- Dallas 1-Wire Bus ---
 one_wire:
   - platform: gpio
-    pin: GPIO4
+    pin: GPIO6
 
 sensor:
   # --- DS18B20 Temperature Probe ---
