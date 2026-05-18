@@ -74,7 +74,7 @@ All flags use `delayed_on: 30s` — the condition must hold continuously for 30 
 
 - **Baseline freeze**: Washer baseline stops learning when `w - baseline >= 0.06 m/s²`, preventing the baseline from chasing the signal upward and eroding the effective delta before the 30s delayed_on completes.
 - **Dryer dominance suppression**: Both accel and gyro flags suppress when `dl >= 0.9 && dm >= 0.5 && dl > wl * 1.2` (dryer clearly dominates).
-- **Washer hold logic**: Once started, washer stays ON for at least 20 min, then holds for up to 8 min of inactivity between wash phases.
+- **Washer hold logic**: Once started, washer stays ON for at least 20 min, then holds for up to 8 min of inactivity between wash phases. Hard cap of 3 hours maximum cycle duration. Weak-activity refresh requires at least 2 of 3 signals (compensated micro ≥ 0.12, large ≥ 0.35, gyro ≥ 0.80) to prevent idle noise from extending the cycle indefinitely.
 
 ### Quick tuning method
 

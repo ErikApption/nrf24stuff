@@ -70,16 +70,13 @@ Improve washer and dryer run detection accuracy with two MPU6050 sensors while r
 - Washer weak-activity refresh thresholds (`wm_effective`, `wl`, `wg`)
 - Washer dryer-dominance gate for hold refresh
 
-### 12. Washer not detected on start (missed ON) — under investigation
-- Result: Open issue.
-- Symptom: Washer runs but `Washer On` never turns ON.
-- Likely causes (in order of probability):
-  1. `washer_large_vibration_trigger` (0.30) too high for the washer's current vibration profile — the 10s max-window large vibration never reaches 0.30 m/s².
-  2. `washer_micro_effective_trigger` (0.10) too high after dryer compensation subtracts too much.
-  3. Jitter path threshold (0.07) not reached because washer vibration is steady-state (elevated but not varying sample-to-sample).
-  4. Baseline freeze threshold (0.06) too high — baseline adapts upward before freeze engages, eroding the delta.
-  5. `delayed_on: 30s` too long — washer vibration is intermittent at startup and never sustains 30 continuous seconds above threshold.
-- Recommended first step: Enable debug metrics (`debug_metrics_internal: "false"`) and observe `Debug Washer Large Trigger Margin` and `Debug Washer Micro Trigger Margin` during a washer cycle to identify which threshold is not being met.
+### 12. Washer not detected on start (missed ON) — resolved
+- Result: Worked.
+- Reason: Hardcoded accel offsets were wrong, causing resting magnitude of ~3.7 m/s² instead of ~9.81. Replaced with auto-calibration system that computes offsets from 30 samples at rest.
+
+### 13. Washer never turns OFF (stays ON forever after cycle completes) — resolved
+- Result: Worked.
+- Reason: The `weak_activity` refresh condition was too permissive — any single signal above a low threshold (wm_effective ≥ 0.08 OR wl ≥ 0.24 OR wg ≥ 0.50) could refresh the 8-minute hold timer. Normal idle sensor noise with the max-window filters was enough to keep triggering it. Fix requires at least 2 of 3 signals above raised thresholds (wm_effective ≥ 0.12, wl ≥ 0.35, wg ≥ 0.80) and adds a 3-hour hard cap on maximum cycle duration.
 
 ## What Clearly Did Not Work
 
@@ -88,3 +85,4 @@ Improve washer and dryer run detection accuracy with two MPU6050 sensors while r
 - Dryer latch with permissive start criteria and no start-confirmation window.
 - Washer hold refresh based on permissive raw weak-activity thresholds.
 - Washer baseline learning while raw signal is already elevated at startup (races against delayed_on timer).
+- Washer weak-activity refresh using OR logic with low thresholds (any single noisy signal refreshes hold indefinitely).
