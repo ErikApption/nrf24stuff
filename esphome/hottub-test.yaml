@@ -1,10 +1,5 @@
 esphome:
   name: hottub
-  on_boot:
-    priority: 800
-    then:
-      - switch.turn_on: sensor_power
-      - delay: 1200ms  # Ensure DS18B20 is fully powered before first conversion
 
 esp32:
   board: esp32-c3-devkitm-1
