@@ -844,7 +844,7 @@ binary_sensor:
     device_class: running # Optional
     lambda: |-
       const uint32_t min_cycle_ms = 20UL * 60UL * 1000UL;
-      const uint32_t inter_phase_hold_ms = 8UL * 60UL * 1000UL;
+      const uint32_t inter_phase_hold_ms = 5UL * 60UL * 1000UL;
       const uint32_t max_cycle_ms = 180UL * 60UL * 1000UL;
       const uint32_t now = millis();
 
@@ -863,11 +863,14 @@ binary_sensor:
 
       // Weak activity must show real washer motion, not just sensor noise.
       // Require at least two of three signals above threshold to refresh hold.
+      // When dryer is confirmed ON, suppress weak_activity entirely — coupled
+      // vibration easily fakes 2-of-3 signals and prevents cycle end.
+      const bool dryer_running = id(dryer_on_sensor).has_state() && id(dryer_on_sensor).state;
       const bool wm_active = (wm_effective >= 0.12f);
       const bool wl_active = (wl >= 0.35f);
       const bool wg_active = (wg >= 0.80f);
       const int activity_signals = (int)wm_active + (int)wl_active + (int)wg_active;
-      const bool weak_activity = !dryer_dominant && (activity_signals >= 2);
+      const bool weak_activity = !dryer_dominant && !dryer_running && (activity_signals >= 2);
 
       const bool strong_start = id(washer_accel_flag_1).state || (id(washer_gyro_flag_1).state && wm_effective >= 0.06f);
 
@@ -904,7 +907,7 @@ binary_sensor:
         return false;
       }
     filters:
-      - delayed_off: 4min # Keep ON unless both flags have been OFF for 4 minutes      
+      - delayed_off: 2min # Keep ON unless both flags have been OFF for 2 minutes      
 
 button:
   - platform: template
