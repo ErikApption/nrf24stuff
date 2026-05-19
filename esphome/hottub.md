@@ -10,6 +10,12 @@ Battery-powered ESP32-C3 with a DS18B20 temperature probe. Wakes every 5 minutes
 - 2× 100kΩ resistors (voltage divider for battery monitoring)
 - Single-cell LiPo battery (3.7V nominal, 4.2V max)
 
+## Power Considerations
+
+- Abandon GPIO Powering (Option C): Tie the DS18B20 $V_{DD}$ pin directly to the ESP32's 3.3V rail. Minimize the electrical steps your power supply has to take.
+
+- Add a Massive Decoupling Capacitor: Solder a large $470\mu\text{F}$ or $1000\mu\text{F}$ electrolytic capacitor directly across the 3V3 and GND pins of your ESP32-C3 board. This acts as a physical power reservoir. When the Wi-Fi spikes, the capacitor handles the current demand instantly, preventing the voltage from dipping low enough to cause a brownout.
+
 ## Wiring
 
 ### DS18B20 Temperature Probe → GPIO4 (powered by GPIO5)
