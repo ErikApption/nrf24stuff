@@ -1,10 +1,12 @@
 esphome:
   name: hottub
-
+  # Crucial for deep sleep: preserves the last state in Home Assistant
+  status_use_retained: true
 esp32:
   board: esp32-c3-devkitm-1
   framework:
     type: arduino
+
 
 wifi:
   ssid: "GrenoblePirates-2G"
