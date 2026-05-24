@@ -6,13 +6,6 @@ esp32:
   framework:
     type: arduino
 
-# --- DS18B20 power control via GPIO ---
-switch:
-  - platform: gpio
-    pin: GPIO3
-    id: sensor_power
-    internal: true
-    restore_mode: ALWAYS_ON
 
 logger:
   level: DEBUG

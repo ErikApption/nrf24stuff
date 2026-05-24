@@ -1,26 +1,10 @@
 esphome:
   name: hottub
-  on_boot:
-    priority: 800
-    then:
-      - switch.turn_on: sensor_power
-      - delay: 1200ms  # Ensure DS18B20 is fully powered before first conversion
 
 esp32:
   board: esp32-c3-devkitm-1
   framework:
     type: arduino
-
-# --- DS18B20 power control via GPIO ---
-switch:
-  - platform: gpio
-    pin: GPIO3
-    id: sensor_power
-    internal: true
-    restore_mode: ALWAYS_ON
-
-logger:
-  level: DEBUG
 
 wifi:
   ssid: "GrenoblePirates-2G"
@@ -40,7 +24,7 @@ ota:
 deep_sleep:
   id: deep_sleep_control
   sleep_duration: 2min
-  run_duration: 45s
+  run_duration: 20s
 
 # --- Dallas 1-Wire Bus ---
 one_wire:
@@ -53,7 +37,7 @@ sensor:
   - platform: dallas_temp
     name: "Hot Tub Temperature"
     id: hottub_temp
-    update_interval: 2s
+    update_interval: 1s
     on_value:
       then:
         - if:
@@ -68,23 +52,8 @@ sensor:
               - script.execute: go_to_sleep
     filters:
       - sliding_window_moving_average:
-          window_size: 5
-          send_every: 5
-
-  # --- Battery Voltage (ADC) ---
-  - platform: adc
-    pin: GPIO2
-    name: "Hot Tub Battery Voltage"
-    id: battery_voltage
-    update_interval: 2s
-    attenuation: 12db
-    filters:
-      # Adjust multiplier for your voltage divider ratio
-      # Example: 2:1 divider (100k + 100k) → multiply by 2
-      - multiply: 2.0
-      - sliding_window_moving_average:
-          window_size: 5
-          send_every: 5
+          window_size: 3
+          send_every: 3
 
 # --- Go to sleep after readings are sent ---
 script:
@@ -92,6 +61,4 @@ script:
     then:
       - logger.log: "Reading captured, powering off sensor and going to deep sleep"
       - delay: 2s
-      - switch.turn_off: sensor_power
-      - delay: 10ms
       - deep_sleep.enter: deep_sleep_control
