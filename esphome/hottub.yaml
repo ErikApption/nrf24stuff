@@ -26,7 +26,7 @@ ota:
 deep_sleep:
   id: deep_sleep_control
   sleep_duration: 5min
-  run_duration: 4s
+  run_duration: 5s
 
 # --- Dallas 1-Wire Bus ---
 one_wire:

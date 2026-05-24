@@ -82,6 +82,7 @@ script:
               }
               return id(feeder_stop).state && id(feeder_seen_inactive);
           timeout: 30s
+          check_interval: 10ms
       - if:
           condition:
             lambda: return id(feeder_stop).state && id(feeder_seen_inactive);
