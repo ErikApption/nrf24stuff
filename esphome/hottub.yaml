@@ -1,7 +1,5 @@
 esphome:
   name: hottub
-  # Crucial for deep sleep: preserves the last state in Home Assistant
-  status_use_retained: true
 esp32:
   board: esp32-c3-devkitm-1
   framework:
@@ -18,6 +16,10 @@ api:
     key: "fHli4zx/CLe2u9KxtFyls1/nNsw3TVnuTIXtFJEg4Yc="
 
 logger:
+
+binary_sensor:
+  - platform: deep_sleep
+    name: "Sensor Wake Status"
 
 ota:
   - platform: esphome
