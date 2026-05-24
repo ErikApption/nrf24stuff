@@ -63,6 +63,10 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+  - id: feeder_cycle_counter
+    type: int
+    restore_value: no
+    initial_value: '0'
 
 script:
   - id: run_feeder_cycle
@@ -71,18 +75,20 @@ script:
       - lambda: |-
           id(feeder_started_active) = id(feeder_stop).state;
           id(feeder_seen_inactive) = !id(feeder_started_active);
+          id(feeder_cycle_counter) = 0;
           ESP_LOGI("feeder_cycle", "Cycle start: stop switch is %s",
                    id(feeder_started_active) ? "ACTIVE" : "INACTIVE");
       - switch.turn_on: feeder_motor
-      - wait_until:
+      - while:
           condition:
             lambda: |-
               if (!id(feeder_stop).state) {
                 id(feeder_seen_inactive) = true;
               }
-              return id(feeder_stop).state && id(feeder_seen_inactive);
-          timeout: 30s
-          check_interval: 10ms
+              id(feeder_cycle_counter)++;
+              return !(id(feeder_stop).state && id(feeder_seen_inactive)) && id(feeder_cycle_counter) < 6000;
+          then:
+            - delay: 5ms
       - if:
           condition:
             lambda: return id(feeder_stop).state && id(feeder_seen_inactive);
@@ -126,7 +132,6 @@ binary_sensor:
     on_press:
       then:
         - logger.log: "Feeder stop switch changed to ACTIVE"
-        - switch.turn_off: feeder_motor
     on_release:
       then:
         - logger.log: "Feeder stop switch changed to INACTIVE"
