@@ -25,8 +25,8 @@ ota:
 # Wake every 5 minutes, take readings, send, sleep again
 deep_sleep:
   id: deep_sleep_control
-  sleep_duration: 2min
-  run_duration: 20s
+  sleep_duration: 5min
+  run_duration: 4s
 
 # --- Dallas 1-Wire Bus ---
 one_wire:
