@@ -17,10 +17,6 @@ api:
 
 logger:
 
-binary_sensor:
-  - platform: deep_sleep
-    name: "Sensor Wake Status"
-
 ota:
   - platform: esphome
     password: "lrhottub1181"
@@ -36,6 +32,10 @@ deep_sleep:
 one_wire:
   - platform: gpio
     pin: GPIO4
+
+binary_sensor:
+  - platform: status
+    name: "Hot Tub Sensor Wake Status"
 
 sensor:
   # --- DS18B20 Temperature Probe ---
