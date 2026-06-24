@@ -4,9 +4,9 @@
 
 ## Overview
 
-Control a 12V motorized ball valve using an ESP32-C3 dev board and a 2-channel relay module, powered by a 12V LiFePO4 battery with solar charging. The system uses deep sleep to minimize power draw, waking periodically to read water level sensors and report status.
+Control a 12V normally-closed motorized ball valve using an ESP32-C3 dev board and a single relay, powered by a 12V LiFePO4 battery with solar charging. The system uses deep sleep to minimize power draw, waking periodically to read water level sensors and report status.
 
-The valve has two wires — applying 12V in one polarity opens it, reversing polarity closes it. A DPDT (double-pole double-throw) relay pair handles the polarity reversal. A MOSFET high-side switch powers the XKC-Y25 sensors only during the wake cycle.
+The valve is **normally closed** (spring-return or latching) — applying 12V opens it, removing power allows it to close. A single relay switches 12V to the valve. A MOSFET high-side switch powers the XKC-Y25 sensors only during the wake cycle.
 
 ---
 
@@ -15,8 +15,8 @@ The valve has two wires — applying 12V in one polarity opens it, reversing pol
 | Component | Qty | Example | Notes |
 |-----------|-----|---------|-------|
 | ESP32-C3 dev board | 1 | ESP32-C3 SuperMini, Seeed XIAO ESP32-C3 | 3.3V logic |
-| 2-channel relay module (5V coil, 3.3V logic compatible) | 1 | HW-307, SRD-05VDC | Must trigger from 3.3V HIGH or have optoisolated inputs |
-| 12V motorized ball valve | 1 | CR02/CR04 style, 2-wire | Typically draws 0.5–1.5A stall |
+| 1-channel relay module (5V coil, 3.3V logic compatible) | 1 | SRD-05VDC, single-channel | Switches 12V to valve |
+| 12V normally-closed motorized ball valve | 1 | 2-wire, NC spring-return | Apply 12V to open, remove to close. 6VA (~500mA at 12V) |
 | XKC-Y25-NPN non-contact liquid level sensor | 3 | XKC-Y25-NPN (5–12V version) | NPN open-collector output, needs pull-up to 3.3V |
 | 12V LiFePO4 battery | 1 | 4S 12.8V 5Ah | ~64 Wh capacity |
 | Solar charge controller | 1 | Victron 75/10, EPever 10A | Must support LiFePO4 profile |
@@ -26,12 +26,15 @@ The valve has two wires — applying 12V in one polarity opens it, reversing pol
 | N-channel MOSFET (gate driver) | 1 | 2N7000, BSS138 | Level-shifts 3.3V GPIO to drive P-FET gate |
 | Gate pull-up resistor | 1 | 100kΩ | Holds P-FET OFF when GPIO is low |
 | Gate pull-down resistor | 1 | 10kΩ | Pulls N-FET gate to GND when ESP32 is asleep |
-| Flyback diodes (optional) | 2 | 1N4007 | Across relay coils if using bare relays |
+| Flyback diode (optional) | 1 | 1N4007 | Across relay coil if using bare relay |
 | Pull-up resistors | 3 | 10kΩ | Pull NPN sensor output up to 3.3V for ESP32 GPIO |
 | Momentary push button (TOGGLE) | 1 | Normally-open, panel mount | Manual valve open/close toggle |
 | LED indicator | 1 | 3mm or 5mm, any color (green/red) | Indicates valve is open |
 | LED current-limiting resistor | 1 | 470Ω (for 3.3V) or 1kΩ | Limits LED current to ~5mA |
 | Button pull-down resistor | 1 | 10kΩ | Hold GPIO LOW when button not pressed |
+| Voltage divider resistor (high) | 1 | 100kΩ | Solar voltage sense — top of divider |
+| Voltage divider resistor (low) | 1 | 15kΩ | Solar voltage sense — bottom of divider |
+| Filter capacitor | 1 | 100nF | Smooths ADC reading on voltage divider |
 | Wiring | — | 18–22 AWG for valve/power, 24 AWG for logic | |
 
 ---
@@ -50,24 +53,20 @@ The valve has two wires — applying 12V in one polarity opens it, reversing pol
                            │ 4S 5Ah Battery │
                            └───────┬────────┘
                                    │ 12V bus
-              ┌────────────────────┼───────────────┐
-              │                    │               │
-         ┌────┴────┐         ┌────┴────┐     ┌────┴────┐
-         │ Buck 5V │         │  Relay  │     │  Relay  │
-         │ Conv.   │         │  CH1    │     │  CH2    │
-         └────┬────┘         └────┬────┘     └────┬────┘
-              │                   │               │
-              │              Coil powered         │
-              │              from 5V rail         │
-              │                   │               │
-              ▼                   ▼               ▼
-        ┌──────────┐        Relay Contacts   Relay Contacts
+              ┌────────────────────┼────────────────┐
+              │                    │                │
+         ┌────┴────┐         ┌────┴────┐      ┌────┴────┐
+         │ Buck 5V │         │  Relay  │      │ P-FET   │
+         │ Conv.   │         │  (valve)│      │ (sensor)│
+         └────┬────┘         └────┬────┘      └────┬────┘
+              │                   │                │
+              ▼                   ▼                ▼
+        ┌──────────┐        Relay Contact     Sensor VCC
         │ ESP32-C3 │
         │          │
-        │  GPIO4 ──────► Relay CH1 IN (open valve)
-        │  GPIO5 ──────► Relay CH2 IN (close valve)
+        │  GPIO4 ──────► Relay IN (valve power)
         │          │
-        │  GPIO3 ──────► MOSFET sensor power switch (see below)
+        │  GPIO3 ──────► MOSFET sensor power switch
         │          │
         │  GPIO6 ◄────── XKC-Y25 #1 Signal (HIGH level)
         │  GPIO7 ◄────── XKC-Y25 #2 Signal (MID level)
@@ -76,6 +75,8 @@ The valve has two wires — applying 12V in one polarity opens it, reversing pol
         │  GPIO2 ◄────── Manual TOGGLE button (+ 10kΩ pull-down)
         │  GPIO10──────► LED indicator (valve open)
         │          │
+        │  GPIO0 ◄────── Solar voltage divider (100k/15k)
+        │          │
         │  3V3  ───────► Pull-up resistors (3× 10kΩ), button VCC
         │  GND  ───────► Relay GND
         │  5V/VIN ◄───── Buck converter 5V out
@@ -83,75 +84,41 @@ The valve has two wires — applying 12V in one polarity opens it, reversing pol
         └──────────┘
 ```
 
-### Relay Contact Wiring (H-Bridge via 2 SPDT Relays)
+### Relay Valve Wiring (Single SPDT Relay)
+
+The normally-closed valve only needs power applied to open. A single relay switches 12V to the valve.
 
 ```
-    12V+ ────┬──────────────────────┬──── 12V+
-             │                      │
-        ┌────┴────┐           ┌────┴────┐
-        │  Relay1 │           │  Relay2 │
-        │  COM    │           │  COM    │
-        ├─────────┤           ├─────────┤
-        │ NC ─┐   │           │ NC ─┐   │
-        │ NO ─┼─┐ │           │ NO ─┼─┐ │
-        └─────┘ │ │           └─────┘ │ │
-                │ │                   │ │
-    GND ────┬───┘ │                   │ └───┬──── GND
-            │     │                   │     │
-            │     └───── VALVE + ─────┘     │
-            │                               │
-            └──────────── VALVE - ──────────┘
+    12V+ ──────────┐
+                   │
+              ┌────┴────┐
+              │  Relay  │
+              │  COM    │
+              ├─────────┤
+              │ NC (unused)
+              │ NO ─────────── Valve Wire + 
+              └─────────┘
+                                    │
+    GND ────────────────────── Valve Wire -
 
     State table:
-    ┌────────┬────────┬─────────────────────────┐
-    │ Relay1 │ Relay2 │ Result                  │
-    ├────────┼────────┼─────────────────────────┤
-    │  OFF   │  OFF   │ No power (valve holds)  │
-    │  ON    │  OFF   │ +12V across valve (OPEN)│
-    │  OFF   │  ON    │ -12V across valve (CLOSE│
-    │  ON    │  ON    │ SHORT — never do this!  │
-    └────────┴────────┴─────────────────────────┘
+    ┌────────┬──────────────────────────┐
+    │ Relay  │ Result                   │
+    ├────────┼──────────────────────────┤
+    │  OFF   │ No power → valve CLOSED │
+    │  ON    │ 12V applied → valve OPEN│
+    └────────┴──────────────────────────┘
 ```
 
-### Detailed Relay Wiring
+**Wiring:**
+- Relay COM → 12V+
+- Relay NO (normally open) → Valve wire +
+- Valve wire - → GND
+- Relay NC → unused
 
-Each SPDT relay has 3 contacts: **COM** (common), **NC** (normally closed), **NO** (normally open).
+When the relay is energized (GPIO4 HIGH), 12V is applied to the valve and it opens. When the relay is de-energized (GPIO4 LOW), the valve loses power and its spring returns it to closed.
 
-**Relay 1:**
-- COM → 12V+
-- NC → Valve wire A
-- NO → GND
-
-**Relay 2:**
-- COM → 12V+  
-- NC → Valve wire B
-- NO → GND
-
-**Valve wiring:**
-- Valve wire A connects to: Relay1 NC *and* Relay2 NO
-- Valve wire B connects to: Relay2 NC *and* Relay1 NO
-
-Wait — let me simplify. The cleanest wiring:
-
-**Relay 1:**
-- COM → Valve wire A
-
-- NC → GND
-- NO → 12V+
-
-**Relay 2:**
-- COM → Valve wire B
-- NC → 12V+
-- NO → GND
-
-| Relay1 | Relay2 | Wire A | Wire B | Motor Direction |
-|--------|--------|--------|--------|-----------------|
-| OFF (NC) | OFF (NC) | GND | 12V+ | CLOSING |
-| ON (NO) | ON (NO) | 12V+ | GND | OPENING |
-| OFF | ON | GND | GND | STOPPED |
-| ON | OFF | 12V+ | 12V+ | STOPPED |
-
-> **To avoid running the motor continuously**, pulse the relays for the valve's rated travel time (typically 5–10 seconds for a ½″–¾″ valve), then return both relays to a stopped state.
+> **Note:** The valve stays open only while the relay is energized. This draws continuous current (~500mA from the valve at 6VA/12V + ~70mA for the relay coil) while open. Plan your duty cycle accordingly for battery life.
 
 ---
 
@@ -258,6 +225,35 @@ The button also serves as a **wake-up source** during deep sleep — pressing it
 - LED ON = valve is open
 - LED OFF = valve is closed
 
+### Solar Panel Voltage Sensing
+
+A resistor voltage divider scales the solar panel voltage (0–21V open-circuit) down to the ESP32-C3's ADC range (0–3.3V). The divider uses 100kΩ (high-side) and 15kΩ (low-side), giving a division ratio of 15/115 = 0.13. A 100nF capacitor across the low-side resistor filters noise.
+
+```
+    Solar Panel + ────┐
+                      │
+                    ┌─┴─┐
+                    │100k│  R8 (high-side)
+                    └─┬─┘
+                      │
+                      ├──────► ESP32 GPIO0 (ADC)
+                      │
+                    ┌─┴─┐         ┌───┐
+                    │15k │  R9    ─┤100n├─  C1 (filter)
+                    └─┬─┘         └─┬─┘
+                      │             │
+                     GND           GND
+```
+
+| Solar Panel Voltage | ADC Voltage (at GPIO0) |
+|--------------------|------------------------|
+| 0V (night) | 0V |
+| 12V (cloudy) | 1.57V |
+| 18V (nominal) | 2.35V |
+| 21V (open circuit) | 2.74V |
+
+> **Note:** The high-impedance divider (115kΩ total) draws only ~0.18mA from the panel — negligible. The 100nF cap prevents ADC jitter from PWM noise if a charge controller is connected.
+
 ### MOSFET Sensor Power Switch
 
 ```
@@ -299,25 +295,26 @@ See [`rain-barrel.yaml`](rain-barrel.yaml) for the full ESPHome configuration.
 Key features of the config:
 - **Deep sleep**: Wakes every 10 minutes, stays awake for 30 seconds to connect to WiFi, read sensors, and report state
 - **MOSFET sensor power**: GPIO3 powers on the XKC-Y25 sensors at boot, waits 800ms for stabilization, then reads
-- **Manual buttons**: GPIO2 (open) and GPIO10 (close) act as wake-up pins — pressing either button wakes the ESP32 from deep sleep and actuates the valve
-- **Interlock via time_based cover**: The cover component ensures only one relay direction is active at a time
-- **Sensor shutoff before sleep**: A script turns off sensor power and relays before entering deep sleep
+- **Single relay valve control**: GPIO4 energizes the relay to open the normally-closed valve; de-energizing closes it
+- **Manual toggle button**: GPIO2 wakes the ESP32 from deep sleep and toggles the valve open/closed
+- **LED indicator**: GPIO10 lights up while the valve is open
+- **Sensor shutoff before sleep**: A script turns off sensor power before entering deep sleep
 
 ---
 
 ## Safety Notes
 
-1. **Never energize both relays simultaneously** — this shorts 12V to GND through the motor. The ESPHome `time_based` cover handles this correctly. The YAML also uses `deep_sleep.prevent` during valve actuation to avoid sleeping mid-operation.
+1. **Continuous current while open** — the normally-closed valve draws 6VA (~500mA at 12V) the entire time it's open, plus ~70mA for the relay coil. Factor this into your battery budget. If the valve will be open for extended periods, consider a latching valve instead.
 
-2. **Adjust `open_duration` / `close_duration`** to match your specific valve. Over-driving a valve at its end stop for extended periods can damage the motor or strip gears.
+2. **Flyback protection** — if using a bare relay without a module, place a 1N4007 diode reverse-biased across the relay coil.
 
-3. **Flyback protection** — if using bare relays without a module, place a 1N4007 diode reverse-biased across each relay coil.
+3. **Power supply sizing** — the valve draws 6VA (500mA at 12V) continuously while open. The LiFePO4 battery handles this fine, but be mindful of total open time for battery life planning.
 
-4. **Power supply sizing** — motorized valves can draw 1–1.5A at stall. The LiFePO4 battery can easily supply this.
+4. **Common ground** — all GND connections (buck converter, relay module, ESP32, battery) must share a common ground.
 
-5. **Common ground** — all GND connections (buck converter, relay module, ESP32, battery) must share a common ground.
+5. **Deep sleep and OTA** — while in deep sleep the ESP32 is unreachable. To flash OTA updates, either wait for a wake cycle or press the manual button to wake it. The 30s run duration gives enough time for OTA to begin (ESPHome will prevent sleep during an active OTA).
 
-6. **Deep sleep and OTA** — while in deep sleep the ESP32 is unreachable. To flash OTA updates, either wait for a wake cycle or press a manual button to wake it. The 30s run duration gives enough time for OTA to begin (ESPHome will prevent sleep during an active OTA).
+6. **Deep sleep and valve state** — if the ESP32 enters deep sleep while the valve is open, the relay GPIO will go LOW and the valve will close. The ESPHome config uses `deep_sleep.prevent` to keep the system awake while the valve is commanded open.
 
 ---
 
@@ -325,10 +322,10 @@ Key features of the config:
 
 | ESP32-C3 Pin | Connects To |
 |--------------|-------------|
+| GPIO0 | Solar voltage divider midpoint (100kΩ/15kΩ + 100nF cap) |
 | GPIO2 | Manual TOGGLE button (+ 10kΩ pull-down) — also deep sleep wake |
 | GPIO3 | MOSFET gate driver (N-FET gate → controls sensor power) |
-| GPIO4 | Relay module CH1 IN (open valve) |
-| GPIO5 | Relay module CH2 IN (close valve) |
+| GPIO4 | Relay module IN (valve power) |
 | GPIO6 | XKC-Y25 #1 signal (HIGH level) + 10kΩ pull-up to 3.3V |
 | GPIO7 | XKC-Y25 #2 signal (MID level) + 10kΩ pull-up to 3.3V |
 | GPIO8 | XKC-Y25 #3 signal (LOW level) + 10kΩ pull-up to 3.3V |
@@ -348,7 +345,8 @@ Key features of the config:
 |-------|-------------------|----------|--------|
 | Deep sleep | ~0.5 mA (ESP32 + buck quiescent) | ~9.5 min/cycle | ~0.6 mWh |
 | Awake (WiFi + sensors) | ~120 mA | ~30s/cycle | ~6 mWh |
-| Valve actuation | ~1.5 A (peak) | ~8s (infrequent) | ~40 mWh |
+| Valve open | ~570 mA (500mA valve + 70mA relay coil) | varies | ~6.8 Wh/hour |
 
-**Average draw**: ~5–8 mA → battery life without solar: 26–42 days on 5Ah LiFePO4.
-With a 20–30W solar panel, the system is easily self-sustaining year-round.
+**Average draw (valve closed)**: ~5–8 mA → battery life without solar: 26–42 days on 5Ah LiFePO4.
+**With valve open**: 570mA continuous → ~8.8 hours max on a full battery before depletion.
+With a 20–30W solar panel, the system is self-sustaining for typical intermittent watering use.

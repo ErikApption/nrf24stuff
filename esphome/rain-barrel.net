@@ -1,0 +1,132 @@
+( { rain-barrel-valve created 2026-06-24 }
+ ( /00000001 TO220  Q1 IRF9540N
+  (    1 12V )
+  (    2 PFET_GATE )
+  (    3 SENSOR_VCC )
+ )
+ ( /00000002 TO92  Q2 2N7000
+  (    1 PFET_GATE )
+  (    2 NFET_CTRL )
+  (    3 GND )
+ )
+ ( /00000003 RESISTOR4  R1 100k
+  (    1 12V )
+  (    2 PFET_GATE )
+ )
+ ( /00000004 RESISTOR4  R2 10k
+  (    1 NFET_CTRL )
+  (    2 GND )
+ )
+ ( /00000005 RESISTOR4  R3 10k
+  (    1 3V3 )
+  (    2 SENS_HIGH )
+ )
+ ( /00000006 RESISTOR4  R4 10k
+  (    1 3V3 )
+  (    2 SENS_MID )
+ )
+ ( /00000007 RESISTOR4  R5 10k
+  (    1 3V3 )
+  (    2 SENS_LOW )
+ )
+ ( /00000008 RESISTOR4  R6 10k
+  (    1 BTN_TOGGLE )
+  (    2 GND )
+ )
+ ( /00000009 RESISTOR4  R7 470
+  (    1 LED_GPIO )
+  (    2 LED_ANODE )
+ )
+ ( /00000010 DIODE2  D1 LED
+  (    1 LED_ANODE )
+  (    2 GND )
+ )
+ ( /00000033 RESISTOR4  R8 100k
+  (    1 SOLAR_POS )
+  (    2 SOLAR_ADC )
+ )
+ ( /00000034 RESISTOR4  R9 15k
+  (    1 SOLAR_ADC )
+  (    2 GND )
+ )
+ ( /00000035 CAP2  C1 100n
+  (    1 SOLAR_ADC )
+  (    2 GND )
+ )
+ ( /00000011 SIP1  J1 12V_POS
+  (    1 12V )
+ )
+ ( /00000012 SIP1  J2 12V_GND
+  (    1 GND )
+ )
+ ( /00000013 SIP1  J3 ESP_GPIO3
+  (    1 NFET_CTRL )
+ )
+ ( /00000014 SIP1  J4 ESP_GPIO4
+  (    1 RELAY_VALVE )
+ )
+ ( /00000016 SIP1  J5 ESP_GPIO6
+  (    1 SENS_HIGH )
+ )
+ ( /00000017 SIP1  J6 ESP_GPIO7
+  (    1 SENS_MID )
+ )
+ ( /00000018 SIP1  J7 ESP_GPIO8
+  (    1 SENS_LOW )
+ )
+ ( /00000019 SIP1  J8 ESP_GPIO2
+  (    1 BTN_TOGGLE )
+ )
+ ( /00000020 SIP1  J9 ESP_GPIO10
+  (    1 LED_GPIO )
+ )
+ ( /00000036 SIP1  J10 ESP_GPIO0
+  (    1 SOLAR_ADC )
+ )
+ ( /00000037 SIP1  J11 SOLAR_POS
+  (    1 SOLAR_POS )
+ )
+ ( /00000021 SIP1  J12 ESP_3V3
+  (    1 3V3 )
+ )
+ ( /00000022 SIP1  J13 ESP_GND
+  (    1 GND )
+ )
+ ( /00000023 SIP1  J14 ESP_5V
+  (    1 5V )
+ )
+ ( /00000024 SIP2  J15 BUCK_IN
+  (    1 12V )
+  (    2 GND )
+ )
+ ( /00000025 SIP2  J16 BUCK_OUT
+  (    1 5V )
+  (    2 GND )
+ )
+ ( /00000026 SIP1  J17 BTN_VCC
+  (    1 3V3 )
+ )
+ ( /00000027 SIP1  J18 BTN_SIG
+  (    1 BTN_TOGGLE )
+ )
+ ( /00000028 SIP3  J19 XKC_HIGH
+  (    1 SENSOR_VCC )
+  (    2 GND )
+  (    3 SENS_HIGH )
+ )
+ ( /00000029 SIP3  J20 XKC_MID
+  (    1 SENSOR_VCC )
+  (    2 GND )
+  (    3 SENS_MID )
+ )
+ ( /00000030 SIP3  J21 XKC_LOW
+  (    1 SENSOR_VCC )
+  (    2 GND )
+  (    3 SENS_LOW )
+ )
+ ( /00000031 SIP2  J22 RELAY_VALVE
+  (    1 RELAY_VALVE )
+  (    2 GND )
+ )
+)
+*

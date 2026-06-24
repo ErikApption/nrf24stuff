@@ -11,6 +11,12 @@ esphome:
       - component.update: level_mid
       - component.update: level_low
       - component.update: water_level_text
+      # Restore LED state based on valve
+      - if:
+          condition:
+            switch.is_on: valve_relay
+          then:
+            - output.turn_on: valve_led
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -41,24 +47,34 @@ deep_sleep:
     allow_other_uses: true
   wakeup_pin_mode: KEEP_AWAKE
 
-# --- Sensor Power MOSFET (GPIO3 controls N-FET gate → P-FET high-side switch) ---
+# --- Outputs ---
 output:
+  # Sensor Power MOSFET (GPIO3 controls N-FET gate → P-FET high-side switch)
   - platform: gpio
     pin: GPIO3
     id: sensor_power
-
-  - platform: gpio
-    pin: GPIO4
-    id: relay_open
-
-  - platform: gpio
-    pin: GPIO5
-    id: relay_close
 
   # LED indicator — ON when valve is open
   - platform: gpio
     pin: GPIO10
     id: valve_led
+
+# --- Valve Relay (single relay, normally-closed valve) ---
+switch:
+  - platform: gpio
+    pin: GPIO4
+    name: "Ball Valve"
+    id: valve_relay
+    icon: "mdi:valve"
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      then:
+        - output.turn_on: valve_led
+        - deep_sleep.prevent: deep_sleep_control
+    on_turn_off:
+      then:
+        - output.turn_off: valve_led
+        - deep_sleep.allow: deep_sleep_control
 
 # --- Manual Toggle Button ---
 binary_sensor:
@@ -74,23 +90,7 @@ binary_sensor:
       - delayed_on: 50ms
     on_press:
       then:
-        - deep_sleep.prevent: deep_sleep_control
-        - if:
-            condition:
-              lambda: 'return id(ball_valve).current_operation == COVER_OPERATION_IDLE && id(ball_valve).position == COVER_OPEN;'
-            then:
-              - cover.close: ball_valve
-              - wait_until:
-                  condition:
-                    lambda: 'return id(ball_valve).current_operation == COVER_OPERATION_IDLE;'
-              - output.turn_off: valve_led
-            else:
-              - cover.open: ball_valve
-              - wait_until:
-                  condition:
-                    lambda: 'return id(ball_valve).current_operation == COVER_OPERATION_IDLE;'
-              - output.turn_on: valve_led
-        - deep_sleep.allow: deep_sleep_control
+        - switch.toggle: valve_relay
 
   # --- Water Level Sensors (XKC-Y25-NPN) ---
   - platform: gpio
@@ -129,30 +129,6 @@ binary_sensor:
       - delayed_on: 500ms
       - delayed_off: 500ms
 
-# --- Valve Control (cover with open/close/stop semantics) ---
-cover:
-  - platform: time_based
-    name: "Ball Valve"
-    id: ball_valve
-    open_action:
-      - output.turn_on: relay_open
-      - output.turn_off: relay_close
-    open_duration: 8s
-    close_action:
-      - output.turn_off: relay_open
-      - output.turn_on: relay_close
-    close_duration: 8s
-    stop_action:
-      - output.turn_off: relay_open
-      - output.turn_off: relay_close
-    has_built_in_endstop: true
-    on_open:
-      then:
-        - output.turn_on: valve_led
-    on_closed:
-      then:
-        - output.turn_off: valve_led
-
 # --- Text sensor for human-readable water level ---
 text_sensor:
   - platform: template
@@ -165,11 +141,26 @@ text_sensor:
       return {"Empty"};
     update_interval: 5s
 
+# --- Solar Panel Voltage (ADC via voltage divider) ---
+sensor:
+  - platform: adc
+    pin: GPIO0
+    name: "Solar Panel Voltage"
+    id: solar_voltage
+    update_interval: 30s
+    attenuation: 11db
+    filters:
+      # Scale ADC reading back to actual panel voltage
+      # Divider ratio: 15 / (100 + 15) = 0.1304
+      # Multiply by inverse: 1 / 0.1304 = 7.667
+      - multiply: 7.667
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+
 # --- Power off sensors before entering deep sleep ---
 script:
   - id: prepare_sleep
     then:
       - output.turn_off: sensor_power
-      - output.turn_off: relay_open
-      - output.turn_off: relay_close
       - delay: 100ms
