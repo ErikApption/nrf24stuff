@@ -1,0 +1,48 @@
+( { register-fans created 2026-06-24 }
+ ( /00000001 TO220  Q1 IRLZ44N
+  (    1 PWM_GATE )
+  (    2 FAN_GND_SWITCHED )
+  (    3 GND )
+ )
+ ( /00000002 RESISTOR4  R1 10k
+  (    1 PWM_GATE )
+  (    2 GND )
+ )
+ ( /00000003 RESISTOR4  R2 10k
+  (    1 3V3 )
+  (    2 FAN1_TACH )
+ )
+ ( /00000004 RESISTOR4  R3 10k
+  (    1 3V3 )
+  (    2 FAN2_TACH )
+ )
+ ( /00000005 SIP1  J1 12V_POS
+  (    1 12V )
+ )
+ ( /00000012 SIP1  J12 12V_GND
+  (    1 GND )
+ )
+ ( /00000006 SIP1  J2 ESP_PWM
+  (    1 PWM_GATE )
+ )
+ ( /00000009 SIP1  J3 ESP_TACH1
+  (    1 FAN1_TACH )
+ )
+ ( /00000010 SIP1  J4 ESP_TACH2
+  (    1 FAN2_TACH )
+ )
+ ( /00000011 SIP1  J5 ESP_3V3
+  (    1 3V3 )
+ )
+ ( /00000007 SIP3  J6 FAN1_CONN
+  (    1 12V )
+  (    2 FAN_GND_SWITCHED )
+  (    3 FAN1_TACH )
+ )
+ ( /00000008 SIP3  J7 FAN2_CONN
+  (    1 12V )
+  (    2 FAN_GND_SWITCHED )
+  (    3 FAN2_TACH )
+ )
+)
+*

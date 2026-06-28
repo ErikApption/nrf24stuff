@@ -1,0 +1,166 @@
+esphome:
+  name: rain-barrel-valve
+  friendly_name: Rain Barrel Valve
+  on_boot:
+    priority: -100
+    then:
+      # Power on sensors, wait for stabilization, read levels
+      - output.turn_on: sensor_power
+      - delay: 800ms
+      - component.update: level_high
+      - component.update: level_mid
+      - component.update: level_low
+      - component.update: water_level_text
+      # Restore LED state based on valve
+      - if:
+          condition:
+            switch.is_on: valve_relay
+          then:
+            - output.turn_on: valve_led
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+logger:
+
+# --- Deep Sleep ---
+deep_sleep:
+  id: deep_sleep_control
+  run_duration: 30s
+  sleep_duration: 10min
+  wakeup_pin:
+    number: GPIO2
+    allow_other_uses: true
+  wakeup_pin_mode: KEEP_AWAKE
+
+# --- Outputs ---
+output:
+  # Sensor Power MOSFET (GPIO3 controls N-FET gate → P-FET high-side switch)
+  - platform: gpio
+    pin: GPIO3
+    id: sensor_power
+
+  # LED indicator — ON when valve is open
+  - platform: gpio
+    pin: GPIO10
+    id: valve_led
+
+# --- Valve Relay (single relay, normally-closed valve) ---
+switch:
+  - platform: gpio
+    pin: GPIO4
+    name: "Ball Valve"
+    id: valve_relay
+    icon: "mdi:valve"
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      then:
+        - output.turn_on: valve_led
+        - deep_sleep.prevent: deep_sleep_control
+    on_turn_off:
+      then:
+        - output.turn_off: valve_led
+        - deep_sleep.allow: deep_sleep_control
+
+# --- Manual Toggle Button ---
+binary_sensor:
+  # Single toggle button — press to open, press again to close
+  - platform: gpio
+    pin:
+      number: GPIO2
+      mode: INPUT
+      allow_other_uses: true
+    name: "Valve Toggle Button"
+    id: btn_toggle
+    filters:
+      - delayed_on: 50ms
+    on_press:
+      then:
+        - switch.toggle: valve_relay
+
+  # --- Water Level Sensors (XKC-Y25-NPN) ---
+  - platform: gpio
+    pin:
+      number: GPIO6
+      mode: INPUT
+      inverted: true  # NPN pulls LOW when water detected
+    name: "Water Level High"
+    id: level_high
+    device_class: moisture
+    filters:
+      - delayed_on: 500ms
+      - delayed_off: 500ms
+
+  - platform: gpio
+    pin:
+      number: GPIO7
+      mode: INPUT
+      inverted: true
+    name: "Water Level Mid"
+    id: level_mid
+    device_class: moisture
+    filters:
+      - delayed_on: 500ms
+      - delayed_off: 500ms
+
+  - platform: gpio
+    pin:
+      number: GPIO8
+      mode: INPUT
+      inverted: true
+    name: "Water Level Low"
+    id: level_low
+    device_class: moisture
+    filters:
+      - delayed_on: 500ms
+      - delayed_off: 500ms
+
+# --- Text sensor for human-readable water level ---
+text_sensor:
+  - platform: template
+    name: "Water Level"
+    id: water_level_text
+    lambda: |-
+      if (id(level_high).state) return {"Full"};
+      if (id(level_mid).state) return {"Mid"};
+      if (id(level_low).state) return {"Low"};
+      return {"Empty"};
+    update_interval: 5s
+
+# --- Solar Panel Voltage (ADC via voltage divider) ---
+sensor:
+  - platform: adc
+    pin: GPIO0
+    name: "Solar Panel Voltage"
+    id: solar_voltage
+    update_interval: 30s
+    attenuation: 11db
+    filters:
+      # Scale ADC reading back to actual panel voltage
+      # Divider ratio: 15 / (100 + 15) = 0.1304
+      # Multiply by inverse: 1 / 0.1304 = 7.667
+      - multiply: 7.667
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+
+# --- Power off sensors before entering deep sleep ---
+script:
+  - id: prepare_sleep
+    then:
+      - output.turn_off: sensor_power
+      - delay: 100ms

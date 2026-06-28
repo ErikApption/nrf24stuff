@@ -1,0 +1,77 @@
+esphome:
+  name: register-fans
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret register_fans_api_key
+
+ota:
+  - platform: esphome
+    password: !secret register_fans_ota_password
+
+wifi:
+  ssid: "GrenoblePirates-2G"
+  password: !secret wifi_password
+
+  ap:
+    ssid: "Register-Fans"
+    password: "regfans1181"
+
+captive_portal:
+
+# Status LED
+status_led:
+  pin:
+    number: GPIO8
+    inverted: false
+
+# Single PWM output driving both fans via one IRLZ44N
+output:
+  - platform: ledc
+    id: fans_pwm
+    pin: GPIO0
+    frequency: 1000Hz  # 1kHz works well for low-side MOSFET switching
+
+# Single fan entity controls both fans together
+fan:
+  - platform: speed
+    id: register_fans
+    name: "Register Fans"
+    output: fans_pwm
+
+# RPM sensors (tachometer) - 2 pulses per revolution
+sensor:
+  - platform: pulse_counter
+    pin:
+      number: GPIO2
+      mode:
+        input: true
+        pullup: true
+    name: "Fan 1 RPM"
+    id: fan1_rpm
+    unit_of_measurement: "RPM"
+    update_interval: 5s
+    filters:
+      - multiply: 0.5
+
+  - platform: pulse_counter
+    pin:
+      number: GPIO3
+      mode:
+        input: true
+        pullup: true
+    name: "Fan 2 RPM"
+    id: fan2_rpm
+    unit_of_measurement: "RPM"
+    update_interval: 5s
+    filters:
+      - multiply: 0.5
