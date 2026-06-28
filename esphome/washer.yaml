@@ -793,13 +793,15 @@ binary_sensor:
 
       // Baseline-relative path (may be blocked by baseline drift).
       const bool baseline_trigger = (wl >= id(washer_large_vibration_trigger) && wm_effective >= id(washer_micro_effective_trigger));
-      // Jitter path: immune to baseline drift, detects sample-to-sample variation.
-      const float WASHER_JITTER_TRIGGER = 0.07f;
-      const bool jitter_trigger = (wj >= WASHER_JITTER_TRIGGER);
+      // Jitter path: gated by minimum large vibration to prevent noise-only triggers.
+      const float WASHER_JITTER_TRIGGER = 0.10f;
+      const float WASHER_JITTER_LARGE_GATE = 0.25f;
+      const bool jitter_trigger = (wj >= WASHER_JITTER_TRIGGER && wl >= WASHER_JITTER_LARGE_GATE);
 
       return baseline_trigger || jitter_trigger;
     filters:
       - delayed_on: 30s
+      - delayed_off: 30s
 
   - platform: template
     name: "Gyro Flag 1"
@@ -844,7 +846,7 @@ binary_sensor:
     device_class: running # Optional
     lambda: |-
       const uint32_t min_cycle_ms = 20UL * 60UL * 1000UL;
-      const uint32_t inter_phase_hold_ms = 5UL * 60UL * 1000UL;
+      const uint32_t inter_phase_hold_ms = 2UL * 60UL * 1000UL;
       const uint32_t max_cycle_ms = 180UL * 60UL * 1000UL;
       const uint32_t now = millis();
 
@@ -862,17 +864,23 @@ binary_sensor:
       const bool dryer_dominant = (dl >= 0.9f && dm >= 0.5f && dl > (wl * 1.2f));
 
       // Weak activity must show real washer motion, not just sensor noise.
-      // Require at least two of three signals above threshold to refresh hold.
+      // Require at least two of three signals above raised thresholds to refresh hold.
       // When dryer is confirmed ON, suppress weak_activity entirely — coupled
       // vibration easily fakes 2-of-3 signals and prevents cycle end.
       const bool dryer_running = id(dryer_on_sensor).has_state() && id(dryer_on_sensor).state;
-      const bool wm_active = (wm_effective >= 0.12f);
-      const bool wl_active = (wl >= 0.35f);
-      const bool wg_active = (wg >= 0.80f);
+      const bool wm_active = (wm_effective >= 0.25f);
+      const bool wl_active = (wl >= 0.55f);
+      const bool wg_active = (wg >= 1.20f);
       const int activity_signals = (int)wm_active + (int)wl_active + (int)wg_active;
       const bool weak_activity = !dryer_dominant && !dryer_running && (activity_signals >= 2);
 
-      const bool strong_start = id(washer_accel_flag_1).state || (id(washer_gyro_flag_1).state && wm_effective >= 0.06f);
+      // Require accel flag with at least some gyro activity, OR gyro flag with
+      // some accel activity. This prevents dryer-only coupling (accel without gyro)
+      // from triggering, while not requiring both flags to sustain for 30s.
+      const float wg_now = id(washer_combined_gyro).has_state() ? id(washer_combined_gyro).state : 0.0f;
+      const bool accel_with_gyro = id(washer_accel_flag_1).state && (wg_now >= 0.60f);
+      const bool gyro_with_accel = id(washer_gyro_flag_1).state && (wm_effective >= 0.06f || wl >= 0.20f);
+      const bool strong_start = accel_with_gyro || gyro_with_accel;
 
       if (strong_start || weak_activity) {
         id(washer_last_activity_ms) = now;
