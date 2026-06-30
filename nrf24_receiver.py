@@ -356,6 +356,9 @@ def listen(timeout=1198): #//20 minutes restart
             start_timer = time.monotonic()
             # Update message counts every 15 minutes
             update_message_counts()
+        else:
+            # No data available — sleep briefly to avoid busy-waiting
+            time.sleep(0.05)  # 50ms pause reduces CPU from ~100% to <1%
     # Update message counts every 15 minutes
     update_message_counts()
     time.sleep(0.5)

@@ -10,6 +10,26 @@ The valve is **normally closed** (spring-return or latching) — applying 12V op
 
 ---
 
+## Motorized Valve Control
+
+- Model: yyzk-4005
+- Specs: 6W 12v DC 
+
+
+## XKC-Y25-NPN
+
+- 5-12v version
+
+Wiring:
+
+- Brown wire(VCC) Power +5V~24V (Power+)
+- Yellow wire(OUT) Signal output
+- Black wire(M) Output level(positive output or negative output) control
+	- When the black wire connect the high level, yellow wire is positive output signal wire, the output is high level when the object is sensed.(NPN closed)
+	- When the black wire connect the low level, yellow wire is negative output signal wire, the output is low level when the object is sensed(NPN disconnect)
+- Blue wire(GND) Ground wire(connect Power-)
+
+
 ## Parts List
 
 | Component | Qty | Example | Notes |
