@@ -1,5 +1,5 @@
 esphome:
-  name: rain-barrel-valve
+  name: rain-barrel
   friendly_name: Rain Barrel Valve
   on_boot:
     priority: -100
@@ -56,12 +56,14 @@ switch:
 # --- Manual Toggle Button ---
 binary_sensor:
   # Single toggle button — press to open, press again to close
+  # Wired: GPIO5 → button → GND (internal pull-up holds HIGH, press pulls LOW)
   - platform: gpio
     pin:
       number: GPIO5
+      inverted: true
       mode:
         input: true
-        pulldown: true
+        pullup: true
     name: "Valve Toggle Button"
     id: btn_toggle
     filters:
