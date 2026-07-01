@@ -97,7 +97,7 @@ Wiring:
         │  GPIO6 ◄────── XKC-Y25 #1 Signal (HIGH level)
         │  GPIO7 ◄────── XKC-Y25 #2 Signal (MID level)
         │          │
-        │  GPIO2 ◄────── Manual TOGGLE button (internal pull-down)
+        │  GPIO5 ◄────── Manual TOGGLE button (internal pull-down)
         │  GPIO10──────► LED indicator (valve open)
         │          │
         │  GPIO0 ◄────── Solar voltage divider (100k/15k)
@@ -223,7 +223,7 @@ The button uses the ESP32-C3's internal pull-down resistor — no external resis
                            │  Button │ (momentary, normally open)
                            └────┬────┘
                                 │
-                                └──────► ESP32 GPIO2 (TOGGLE, internal pull-down)
+                                └──────► ESP32 GPIO5 (TOGGLE, internal pull-down)
 ```
 
 When not pressed, the internal pull-down holds GPIO2 LOW. Pressing the button connects GPIO2 to 3.3V (HIGH), triggering the toggle.
@@ -306,8 +306,8 @@ Key features of the config:
 | ESP32-C3 Pin | Connects To |
 |--------------|-------------|
 | GPIO0 | Solar voltage divider midpoint (100kΩ/15kΩ + 100nF cap) |
-| GPIO2 | Manual TOGGLE button (internal pull-down, button connects to 3.3V) |
 | GPIO4 | MOSFET trigger module signal input (valve power) |
+| GPIO5 | Manual TOGGLE button (internal pull-down, button connects to 3.3V) |
 | GPIO6 | XKC-Y25 #1 signal (HIGH level) + 10kΩ pull-up to 3.3V |
 | GPIO7 | XKC-Y25 #2 signal (MID level) + 10kΩ pull-up to 3.3V |
 | GPIO10 | LED indicator (+ 470Ω resistor → LED → GND) |

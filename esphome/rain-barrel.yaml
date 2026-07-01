@@ -4,11 +4,6 @@ esphome:
   on_boot:
     priority: -100
     then:
-      # Wait for sensors to stabilize, then read levels
-      - delay: 800ms
-      - component.update: level_high
-      - component.update: level_mid
-      - component.update: water_level_text
       # Restore LED state based on valve
       - if:
           condition:
@@ -27,7 +22,7 @@ wifi:
 
 api:
   encryption:
-    key: "RTmDpSTtAQa5pk8xyYM2ibFHnjMuS68a41OMLqJAlo8="
+    key: !secret api_key
 
 ota:
   - platform: esphome
@@ -63,7 +58,7 @@ binary_sensor:
   # Single toggle button — press to open, press again to close
   - platform: gpio
     pin:
-      number: GPIO2
+      number: GPIO5
       mode:
         input: true
         pulldown: true
@@ -118,7 +113,7 @@ sensor:
     name: "Solar Panel Voltage"
     id: solar_voltage
     update_interval: 30s
-    attenuation: 11db
+    attenuation: 12db
     filters:
       # Scale ADC reading back to actual panel voltage
       # Divider ratio: 15 / (100 + 15) = 0.1304
