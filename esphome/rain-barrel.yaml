@@ -4,12 +4,8 @@ esphome:
   on_boot:
     priority: -100
     then:
-      # Restore LED state based on valve
-      - if:
-          condition:
-            switch.is_on: valve_switch
-          then:
-            - output.turn_on: valve_led
+      # Ensure valve is off on boot
+      - switch.turn_off: valve_switch
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -31,27 +27,20 @@ ota:
 logger:
 
 # --- Outputs ---
-output:
-  # LED indicator — ON when valve is open
-  - platform: gpio
-    pin: GPIO10
-    id: valve_led
+# (No GPIO-driven outputs — LED is hardwired on 12V valve output)
 
 # --- Valve Control (PWM MOSFET Trigger Module on GPIO4) ---
 # Dual high-power MOSFET module switches 12V to the normally-closed valve.
 # GPIO4 HIGH = MOSFET on = 12V to valve = valve opens
 # GPIO4 LOW  = MOSFET off = no power = valve closes (spring return)
+# LED is wired directly on the 12V output (lights when valve is powered)
 switch:
   - platform: gpio
     pin: GPIO4
     name: "Ball Valve"
     id: valve_switch
     icon: "mdi:valve"
-    restore_mode: RESTORE_DEFAULT_OFF
-    on_turn_on:
-      - output.turn_on: valve_led
-    on_turn_off:
-      - output.turn_off: valve_led
+    restore_mode: ALWAYS_OFF
 
 # --- Manual Toggle Button ---
 binary_sensor:
@@ -75,9 +64,8 @@ binary_sensor:
   # --- Water Level Sensors (XKC-Y25-NPN) ---
   - platform: gpio
     pin:
-      number: GPIO6
+      number: GPIO7
       mode: INPUT
-      inverted: true  # NPN pulls LOW when water detected
     name: "Water Level High"
     id: level_high
     device_class: moisture
@@ -87,9 +75,8 @@ binary_sensor:
 
   - platform: gpio
     pin:
-      number: GPIO7
+      number: GPIO6
       mode: INPUT
-      inverted: true
     name: "Water Level Mid"
     id: level_mid
     device_class: moisture
@@ -105,7 +92,7 @@ text_sensor:
     lambda: |-
       if (id(level_high).state) return {"Full"};
       if (id(level_mid).state) return {"Mid"};
-      return {"Empty"};
+      return {"Low"};
     update_interval: 5s
 
 # --- Solar Panel Voltage (ADC via voltage divider) ---
